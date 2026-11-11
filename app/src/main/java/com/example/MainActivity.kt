@@ -2,6 +2,8 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -45,6 +47,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.uiState.collectAsState()
             val projects by viewModel.projectsFlow.collectAsState(initial = emptyList())
+
+            val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                if (uri != null) viewModel.importVideo(uri)
+            }
+            val sheetPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                if (uri != null) viewModel.importSpriteSheet(uri)
+            }
 
             SpriteXPTheme(darkTheme = state.isDarkTheme) {
                 // Manipulador de botão voltar do Android (BackHandler)
@@ -128,6 +137,8 @@ class MainActivity : ComponentActivity() {
                                                 onFpsChange = { fps: Int -> viewModel.setVideoFps(fps) },
                                                 onSelectFrame = { idx: Int -> viewModel.selectVideoFrame(idx) },
                                                 onTogglePlay = { viewModel.toggleVideoPlay() },
+                                                onPickVideo = { videoPicker.launch("video/*") },
+                                                isImporting = state.isImporting,
                                                 onExportClick = { viewModel.navigateTo("export") },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
@@ -141,6 +152,7 @@ class MainActivity : ComponentActivity() {
                                                 endRange = state.analyzerSelectedRangeEnd,
                                                 fps = state.analyzerFps,
                                                 onRangeChange = { s, e -> viewModel.setAnalyzerRange(s, e) },
+                                                onPickSheet = { sheetPicker.launch("image/*") },
                                                 onExportClick = { viewModel.navigateTo("export") },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
@@ -162,12 +174,7 @@ class MainActivity : ComponentActivity() {
                                                 projects = projects,
                                                 onNewProject = { viewModel.navigateTo("converter") },
                                                 onOpenProject = { _ -> viewModel.navigateTo("analyzer") },
-                                                onDeleteProject = { id ->
-                                                    // Inicia coroutine via viewModel
-                                                    (viewModel as? MainViewModel)?.let { vm ->
-                                                        // Dispara exclusão
-                                                    }
-                                                },
+                                                onDeleteProject = { id -> viewModel.deleteProject(id) },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
                                         }

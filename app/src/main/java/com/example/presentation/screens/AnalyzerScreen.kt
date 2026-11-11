@@ -68,6 +68,7 @@ fun AnalyzerScreen(
     endRange: Int,
     fps: Int,
     onRangeChange: (Int, Int) -> Unit,
+    onPickSheet: () -> Unit,
     onExportClick: () -> Unit,
     onCloseClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -126,7 +127,12 @@ fun AnalyzerScreen(
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Arquivo", fontFamily = PixelifyFontFamily, fontSize = 13.sp)
+                    Text(
+                        "Arquivo",
+                        fontFamily = PixelifyFontFamily,
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable { onPickSheet() }
+                    )
                     Text("Editar", fontFamily = PixelifyFontFamily, fontSize = 13.sp)
                     Text("Exibir", fontFamily = PixelifyFontFamily, fontSize = 13.sp)
                     Text("Ajuda", fontFamily = PixelifyFontFamily, fontSize = 13.sp)
@@ -280,6 +286,12 @@ fun AnalyzerScreen(
                                     )
                                 }
                             }
+
+                            XpButton(
+                                text = "Abrir",
+                                onClick = onPickSheet,
+                                testTag = "analyzer_open_button"
+                            )
 
                             XpButton(
                                 text = "Exportar",
