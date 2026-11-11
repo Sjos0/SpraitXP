@@ -162,12 +162,7 @@ class MainActivity : ComponentActivity() {
                                                 projects = projects,
                                                 onNewProject = { viewModel.navigateTo("converter") },
                                                 onOpenProject = { _ -> viewModel.navigateTo("analyzer") },
-                                                onDeleteProject = { id ->
-                                                    // Inicia coroutine via viewModel
-                                                    (viewModel as? MainViewModel)?.let { vm ->
-                                                        // Dispara exclusão
-                                                    }
-                                                },
+                                                onDeleteProject = { id -> viewModel.deleteProject(id) },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
                                         }

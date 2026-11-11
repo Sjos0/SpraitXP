@@ -1,9 +1,17 @@
 package com.example.data.repository
 
+import android.content.Context
 import com.example.domain.model.SpriteProject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 interface ProjectRepository {
     fun getProjects(): Flow<List<SpriteProject>>
@@ -11,60 +19,76 @@ interface ProjectRepository {
     suspend fun deleteProject(id: String)
 }
 
-class InMemoryProjectRepository : ProjectRepository {
+/**
+ * Biblioteca de projetos persistida em JSON no armazenamento interno do app.
+ * Usa org.json, que já vem no Android, então não adiciona dependência.
+ */
+class JsonProjectRepository(context: Context) : ProjectRepository {
 
-    private val _projects = MutableStateFlow<List<SpriteProject>>(
-        listOf(
-            SpriteProject(
-                id = "1",
-                title = "Personagem Hero",
-                dateString = "Hoje",
-                frameCount = 16,
-                resolution = 64,
-                paletteName = "PICO-8",
-                iconCategory = "person"
-            ),
-            SpriteProject(
-                id = "2",
-                title = "Guerreiro Armadura",
-                dateString = "Ontem",
-                frameCount = 12,
-                resolution = 48,
-                paletteName = "SWEETIE-16",
-                iconCategory = "shield"
-            ),
-            SpriteProject(
-                id = "3",
-                title = "Inimigo Monstro",
-                dateString = "05/11/2026",
-                frameCount = 8,
-                resolution = 32,
-                paletteName = "Game Boy",
-                iconCategory = "pest_control"
-            ),
-            SpriteProject(
-                id = "4",
-                title = "Item Espada",
-                dateString = "28/10/2026",
-                frameCount = 4,
-                resolution = 32,
-                paletteName = "Endesga 32",
-                iconCategory = "brush"
-            )
-        )
-    )
+    private val file = File(context.filesDir, "projects.json")
+    private val lock = Mutex()
+    private val state = MutableStateFlow(readAll())
 
-    override fun getProjects(): Flow<List<SpriteProject>> = _projects.asStateFlow()
+    override fun getProjects(): Flow<List<SpriteProject>> = state.asStateFlow()
 
     override suspend fun addProject(project: SpriteProject) {
-        val current = _projects.value.toMutableList()
-        current.add(0, project)
-        _projects.value = current
+        update { list -> list.filterNot { it.id == project.id } + project }
     }
 
     override suspend fun deleteProject(id: String) {
-        val current = _projects.value.toMutableList()
-        current.removeAll { it.id == id }
-        _projects.value = current
+        update { list -> list.filterNot { it.id == id } }
     }
+
+    private suspend fun update(transform: (List<SpriteProject>) -> List<SpriteProject>) {
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                val next = transform(state.value)
+                writeAll(next)
+                state.value = next
+            }
+        }
+    }
+
+    private fun readAll(): List<SpriteProject> {
+        return try {
+            if (!file.exists()) return emptyList()
+            val array = JSONArray(file.readText())
+            List(array.length()) { i -> fromJson(array.getJSONObject(i)) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun writeAll(list: List<SpriteProject>) {
+        val array = JSONArray()
+        list.forEach { array.put(toJson(it)) }
+        // Escreve em arquivo temporário e troca depois, para não corromper a biblioteca se o app fechar no meio.
+        val tmp = File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(array.toString())
+        if (!tmp.renameTo(file)) {
+            file.writeText(array.toString())
+            tmp.delete()
+        }
+    }
+
+    private fun toJson(p: SpriteProject): JSONObject = JSONObject()
+        .put("id", p.id)
+        .put("title", p.title)
+        .put("dateString", p.dateString)
+        .put("frameCount", p.frameCount)
+        .put("resolution", p.resolution)
+        .put("paletteName", p.paletteName)
+        .put("iconCategory", p.iconCategory)
+        .put("localImagePath", p.localImagePath ?: JSONObject.NULL)
+
+    private fun fromJson(o: JSONObject): SpriteProject = SpriteProject(
+        id = o.getString("id"),
+        title = o.getString("title"),
+        dateString = o.getString("dateString"),
+        frameCount = o.getInt("frameCount"),
+        resolution = o.getInt("resolution"),
+        paletteName = o.getString("paletteName"),
+        iconCategory = o.optString("iconCategory", "gamepad"),
+        localImagePath = if (o.isNull("localImagePath")) null else o.getString("localImagePath")
+    )
 }
