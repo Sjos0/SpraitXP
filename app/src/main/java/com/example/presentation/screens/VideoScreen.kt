@@ -72,6 +72,8 @@ fun VideoScreen(
     onSelectFrame: (Int) -> Unit,
     onTogglePlay: () -> Unit,
     onExportClick: () -> Unit,
+    onPickVideo: () -> Unit,
+    isImporting: Boolean,
     onCloseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -182,6 +184,26 @@ fun VideoScreen(
                             )
                         },
                         testTag = "video_render_play_button"
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Barra de importação (Arquivo > Importar vídeo, 1:1 obrigatório)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    XpButton(
+                        text = "Importar vídeo",
+                        onClick = onPickVideo,
+                        testTag = "video_import_button"
+                    )
+                    Text(
+                        text = if (isImporting) "Extraindo quadros..." else "Vídeo 1:1 (quadrado)",
+                        fontFamily = VT323FontFamily,
+                        fontSize = 16.sp
                     )
                 }
 
