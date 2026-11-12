@@ -1,6 +1,7 @@
 package com.example.presentation.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -9,7 +10,13 @@ import android.util.Log
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.pipeline.MediaProcessingPipeline
+import com.example.data.update.AppUpdater
+import com.example.data.update.InstallEvent
+import com.example.data.update.InstallEvents
+import com.example.data.update.UpdateStage
+import com.example.data.update.UpdateUiState
 import com.example.data.pipeline.PaletteExtractor
 import com.example.data.pipeline.PixelArtConverterPipeline
 import com.example.data.repository.JsonProjectRepository
@@ -92,6 +99,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    private val updater = AppUpdater(application)
+    private val _updateState = MutableStateFlow(UpdateUiState())
+    val updateState: StateFlow<UpdateUiState> = _updateState.asStateFlow()
+
     val projectsFlow = projectRepository.getProjects()
 
     private var debounceConversionJob: Job? = null
@@ -108,6 +119,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         createDemoBitmaps()
+        observeInstallEvents()
         startSplashLoading()
     }
 
@@ -178,6 +190,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 alertMessage = "Bem-vindo ao SpriteXP!"
             )
             requestPixelConversion()
+            announceIfJustUpdated()
+            checkForUpdates(manual = false)
         }
     }
 
@@ -562,6 +576,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteProject(id: String) {
         viewModelScope.launch { projectRepository.deleteProject(id) }
+    }
+
+    // ---------- Atualização automática ----------
+
+    private fun setUpdate(transform: (UpdateUiState) -> UpdateUiState) {
+        _updateState.value = transform(_updateState.value)
+    }
+
+    /** Recebe o resultado da instalação enviado pelo PackageInstaller. */
+    private fun observeInstallEvents() {
+        viewModelScope.launch {
+            InstallEvents.events.collect { event ->
+                when (event) {
+                    InstallEvent.Installed -> setUpdate { it.copy(stage = UpdateStage.IDLE) }
+                    is InstallEvent.Failed -> setUpdate {
+                        it.copy(stage = UpdateStage.ERROR, message = "Não foi possível instalar: ${event.reason}")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Mostra uma vez a mensagem de sucesso depois que o app reinicia numa versão nova. */
+    private fun announceIfJustUpdated() {
+        val prefs = getApplication<Application>().getSharedPreferences("spritexp_update", Context.MODE_PRIVATE)
+        val last = prefs.getInt("last_build", -1)
+        val current = BuildConfig.VERSION_CODE
+        if (last != -1 && last != current) showAlert("SpriteXP atualizado com sucesso!")
+        prefs.edit().putInt("last_build", current).apply()
+    }
+
+    /** Consulta a release mais recente. Se for manual, avisa também quando não há novidade. */
+    fun checkForUpdates(manual: Boolean = false) {
+        viewModelScope.launch {
+            setUpdate { it.copy(stage = UpdateStage.CHECKING, message = null) }
+            try {
+                val info = updater.fetchLatest()
+                if (info != null && updater.isNewer(info)) {
+                    setUpdate { it.copy(stage = UpdateStage.AVAILABLE, info = info) }
+                } else {
+                    setUpdate { it.copy(stage = UpdateStage.IDLE, info = null) }
+                    if (manual) showAlert("Você já está com a versão mais recente.")
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Falha ao verificar atualização", e)
+                setUpdate { it.copy(stage = UpdateStage.IDLE) }
+                if (manual) showAlert("Não foi possível verificar atualizações agora.")
+            }
+        }
+    }
+
+    /** Baixa o APK com barra de progresso dentro do app e abre a instalação do Android. */
+    fun startUpdate() {
+        val info = _updateState.value.info ?: return
+        viewModelScope.launch {
+            setUpdate { it.copy(stage = UpdateStage.DOWNLOADING, progress = 0f) }
+            try {
+                val apk = updater.download(info) { p -> setUpdate { it.copy(progress = p) } }
+                setUpdate { it.copy(stage = UpdateStage.INSTALLING) }
+                updater.install(apk)
+            } catch (e: Exception) {
+                Log.e(tag, "Falha no download da atualização", e)
+                setUpdate {
+                    it.copy(
+                        stage = UpdateStage.ERROR,
+                        message = "Falha ao baixar a atualização. Verifique a conexão e tente de novo."
+                    )
+                }
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        setUpdate { it.copy(stage = UpdateStage.IDLE) }
     }
 
     private companion object {
