@@ -16,3 +16,8 @@
 local.properties
 .env
 debug.keystore
+
+# Binários e saídas de build: os APKs são publicados só em Releases
+APK/
+*.apk
+dist/

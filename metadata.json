@@ -1,6 +1,4 @@
 {
   "name": "SpriteXP",
-  "description": "Oficina de pixel art e gerador de sprite sheets retrô estilo Windows XP para Android",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "Oficina de pixel art e gerador de sprite sheets retrô estilo Windows XP para Android"
 }
