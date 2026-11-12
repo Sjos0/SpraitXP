@@ -42,6 +42,7 @@ import io.github.sjos0.spritexp.ui.theme.LunaTitleEnd
 import io.github.sjos0.spritexp.ui.theme.LunaTitleMid
 import io.github.sjos0.spritexp.ui.theme.LunaTitleStart
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import io.github.sjos0.spritexp.ui.theme.XpButtonFace
 import io.github.sjos0.spritexp.ui.theme.XpCloseOrange
 import io.github.sjos0.spritexp.ui.theme.XpCloseOrangePressed
@@ -265,7 +266,10 @@ fun XpButton(
                 color = textColor,
                 fontFamily = PixelifyFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
+                fontSize = 15.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
