@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "io.github.sjos0.spritexp"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
@@ -18,8 +18,6 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Não remova nem altere estes signingConfigs: são necessários para compilar,
-  // instalar e atualizar o app no AI Studio.
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
@@ -42,11 +40,9 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      // Não remova esta linha: é necessária para o AI Studio.
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
-      // Não remova esta linha: é necessária para o AI Studio.
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }
@@ -65,7 +61,6 @@ android {
   }
 }
 
-// Dependências removidas por não serem usadas no código (Room, Firebase, Retrofit, OkHttp, Moshi, Secrets).
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.activity.compose)
