@@ -49,6 +49,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -123,6 +130,7 @@ fun WorkScreen(
     var tab by remember { mutableStateOf(WorkTab.AJUSTES) }
     var menuOpen by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    var enlargeOpen by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().background(DarkBg)) {
         TopBar(
@@ -168,7 +176,8 @@ fun WorkScreen(
                 onPickOriginal = { c ->
                     picking = false
                     onSettingsChange { it.copy(chromaKeyColor = c) }
-                }
+                },
+                onEnlarge = { enlargeOpen = true }
             )
 
             PlaybackBar(
@@ -227,6 +236,92 @@ fun WorkScreen(
             }
         }
     }
+
+    if (enlargeOpen) {
+        EnlargeDialog(
+            frames = if (frames.isNotEmpty()) frames else listOfNotNull(convertedFrame),
+            fps = fps,
+            onDismiss = { enlargeOpen = false }
+        )
+    }
+}
+
+/** Ampliação em tela cheia: só o sprite, em fundo quadriculado para julgar a transparência. */
+@Composable
+private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit) {
+    var index by remember { mutableStateOf(0) }
+    var playing by remember { mutableStateOf(false) }
+
+    // A animação existe só enquanto o diálogo está aberto: ao fechar, a LaunchedEffect é cancelada.
+    LaunchedEffect(playing, frames.size, fps) {
+        if (playing && frames.size > 1) {
+            while (true) {
+                delay(1000L / fps.coerceAtLeast(1))
+                index = (index + 1) % frames.size
+            }
+        }
+    }
+
+    val current = frames.getOrNull(index.coerceIn(0, maxOf(0, frames.size - 1)))
+    val counter = if (frames.isEmpty()) "0/0" else "${index.coerceIn(0, frames.size - 1) + 1}/${frames.size}"
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize().checkerboard()) {
+            if (current != null) {
+                Image(
+                    bitmap = current.asImageBitmap(),
+                    contentDescription = "Sprite ampliado",
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.None
+                )
+            }
+            XpButton(
+                text = "Fechar",
+                onClick = onDismiss,
+                isDangerOrange = true,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                testTag = "enlarge_close"
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color(0xCC000000))
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                XpButton(
+                    text = if (playing) "Pausar" else "Play",
+                    onClick = { playing = !playing },
+                    isPrimaryGreen = true,
+                    modifier = Modifier.width(140.dp),
+                    testTag = "enlarge_play"
+                )
+                Text(text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+/** Fundo xadrez cinza, para ver áreas transparentes do sprite. */
+private fun Modifier.checkerboard(): Modifier = this.drawBehind {
+    val cell = 16.dp.toPx()
+    val cols = (size.width / cell).toInt() + 1
+    val rows = (size.height / cell).toInt() + 1
+    for (row in 0 until rows) {
+        for (col in 0 until cols) {
+            drawRect(
+                color = if ((row + col) % 2 == 0) Color(0xFF3A3A3A) else Color(0xFF2A2A2A),
+                topLeft = Offset(col * cell, row * cell),
+                size = Size(cell, cell)
+            )
+        }
+    }
 }
 
 @Composable
@@ -260,7 +355,8 @@ private fun Preview(
     convertedFrame: Bitmap?,
     isConverting: Boolean,
     picking: Boolean,
-    onPickOriginal: (Color) -> Unit
+    onPickOriginal: (Color) -> Unit,
+    onEnlarge: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -274,14 +370,26 @@ private fun Preview(
             onPick = onPickOriginal,
             modifier = Modifier.weight(1f)
         )
-        PreviewPanel(
-            title = "PIXEL ART",
-            bitmap = convertedFrame,
-            loading = isConverting,
-            picking = false,
-            onPick = null,
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            PreviewPanel(
+                title = "PIXEL ART",
+                bitmap = convertedFrame,
+                loading = isConverting,
+                picking = false,
+                onPick = null,
+                modifier = Modifier.fillMaxWidth()
+            )
+            XpButton(
+                text = "Ampliar",
+                onClick = onEnlarge,
+                enabled = convertedFrame != null,
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "work_enlarge"
+            )
+        }
     }
 }
 
