@@ -38,6 +38,11 @@ enum class ExportFormat(val displayName: String, val extension: String) {
     JSON_METADATA("JSON de metadados", "json")
 }
 
+enum class ChromaMode(val displayName: String) {
+    DISTANCE("Distância"),
+    HUE("Matiz")
+}
+
 data class SpriteFrame(
     val index: Int,
     val isSelected: Boolean = true,
@@ -61,6 +66,13 @@ data class PixelArtSettings(
     val chromaKeyEnabled: Boolean = true,
     val chromaKeyColor: Color = Color(0xFF00FF00), // Verde padrão
     val chromaTolerance: Float = 35f, // 0..100
+    val chromaMode: ChromaMode = ChromaMode.DISTANCE,
+    val chromaHueTolerance: Float = 25f, // 0..90 graus
+    val chromaSatMin: Float = 0.35f, // 0..1
+    val chromaValMin: Float = 0.12f, // 0..1
+    val chromaFeather: Float = 0f, // 0..30
+    val chromaDespill: Boolean = false,
+    val extraChromaColors: List<Color> = emptyList(), // máx. 3
     val brightness: Float = 0f, // -100..100
     val contrast: Float = 0f, // -100..100
     val edgeEnhance: Float = 0f, // 0..200%
