@@ -25,7 +25,7 @@ data class ReleaseInfo(
     val notes: String
 )
 
-enum class UpdateStage { IDLE, CHECKING, DOWNLOADING, NEED_PERMISSION, INSTALLING, ERROR }
+enum class UpdateStage { IDLE, CHECKING, AVAILABLE, DOWNLOADING, NEED_PERMISSION, INSTALLING, ERROR }
 
 data class UpdateUiState(
     val stage: UpdateStage = UpdateStage.IDLE,

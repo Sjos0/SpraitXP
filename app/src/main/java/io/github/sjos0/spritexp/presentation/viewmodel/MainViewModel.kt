@@ -27,6 +27,7 @@ import io.github.sjos0.spritexp.domain.model.PalettePreset
 import io.github.sjos0.spritexp.domain.model.PixelArtSettings
 import io.github.sjos0.spritexp.domain.model.SpriteProject
 import io.github.sjos0.spritexp.domain.usecase.ImageRules
+import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,7 +57,7 @@ data class MainUiState(
 
     // Origem atual
     val sourceKind: SourceKind = SourceKind.DEMO,
-    val sourceName: String = "Demo",
+    val sourceName: String = "",
     val isImporting: Boolean = false,
 
     // Conversor Imagem
@@ -68,7 +69,9 @@ data class MainUiState(
     // Vídeo e Sprite Sheet
     val videoFrames: List<Bitmap> = emptyList(),
     val videoStartFrame: Int = 1,
-    val videoEndFrame: Int = 12,
+    val videoEndFrame: Int = 1,
+    val videoTotalFrames: Int = 0,
+    val videoSourceFps: Int = VideoFrameMath.DEFAULT_FPS,
     val currentFrameIndex: Int = 0,
     val isPlayingPreview: Boolean = false,
     val videoFps: Int = 8,
@@ -120,64 +123,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var videoUri: String? = null
 
     init {
-        createDemoBitmaps()
         observeInstallEvents()
         startSplashLoading()
-    }
-
-    // ---------- Demonstração inicial ----------
-
-    /** Gera bitmaps de demonstração em memória, sem assets. */
-    private fun createDemoBitmaps() {
-        try {
-            val origBmp = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(origBmp)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.color = android.graphics.Color.rgb(0, 255, 0)
-            canvas.drawRect(0f, 0f, 64f, 64f, paint)
-            paint.color = android.graphics.Color.rgb(36, 94, 220)
-            canvas.drawRect(20f, 24f, 44f, 52f, paint)
-            paint.color = android.graphics.Color.rgb(255, 204, 170)
-            canvas.drawCircle(32f, 18f, 10f, paint)
-            paint.color = android.graphics.Color.rgb(10, 36, 106)
-            canvas.drawRect(24f, 6f, 40f, 12f, paint)
-
-            val sheetCols = 6
-            val sheetRows = 6
-            val frameSize = 32
-            val sheetBmp = Bitmap.createBitmap(sheetCols * frameSize, sheetRows * frameSize, Bitmap.Config.ARGB_8888)
-            val sheetCanvas = Canvas(sheetBmp)
-            val demoFrames = mutableListOf<Bitmap>()
-            val colors = listOf(
-                android.graphics.Color.rgb(36, 94, 220),
-                android.graphics.Color.rgb(224, 87, 42),
-                android.graphics.Color.rgb(60, 154, 60),
-                android.graphics.Color.rgb(126, 37, 83),
-                android.graphics.Color.rgb(255, 163, 0),
-                android.graphics.Color.rgb(41, 173, 255)
-            )
-            for (i in 0 until sheetCols * sheetRows) {
-                val col = i % sheetCols
-                val row = i / sheetCols
-                val left = (col * frameSize).toFloat()
-                val top = (row * frameSize).toFloat()
-                val offset = (i % 6) * 2f
-                paint.color = colors[i % colors.size]
-                sheetCanvas.drawCircle(left + frameSize / 2f, top + frameSize / 2f - offset + 4f, 8f, paint)
-                if (i < 12) {
-                    val single = Bitmap.createBitmap(frameSize, frameSize, Bitmap.Config.ARGB_8888)
-                    Canvas(single).drawCircle(frameSize / 2f, frameSize / 2f - offset + 4f, 8f, paint)
-                    demoFrames.add(single)
-                }
-            }
-            _uiState.value = _uiState.value.copy(
-                originalBitmap = origBmp,
-                analyzerSheetBitmap = sheetBmp,
-                videoFrames = demoFrames
-            )
-        } catch (e: Exception) {
-            Log.e(tag, "Falha ao criar demonstração", e)
-        }
     }
 
     private fun startSplashLoading() {
@@ -267,16 +214,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val converted = original?.let { convertOne(it, settings, palette) }
 
+            val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
+
             // Ignora resultado de um pedido que já foi substituído.
             if (version == conversionVersion) {
                 _uiState.value = _uiState.value.copy(
                     convertedBitmap = converted ?: _uiState.value.convertedBitmap,
                     videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else _uiState.value.videoFrames,
+                    analyzerSheetBitmap = videoSheet?.bitmap ?: _uiState.value.analyzerSheetBitmap,
+                    analyzerColumns = videoSheet?.columns ?: _uiState.value.analyzerColumns,
+                    analyzerRows = videoSheet?.rows ?: _uiState.value.analyzerRows,
+                    analyzerSelectedRangeStart = if (videoSheet != null) 1 else _uiState.value.analyzerSelectedRangeStart,
+                    analyzerSelectedRangeEnd = if (videoSheet != null) convertedFrames.size else _uiState.value.analyzerSelectedRangeEnd,
                     isConverting = false
                 )
             }
         }
     }
+
+    /** Sprite sheet com todos os quadros convertidos, para o analisador. */
+    private suspend fun buildVideoSheet(frames: List<Bitmap>): VideoSheet {
+        val columns = VideoFrameMath.sheetColumns(frames.size)
+        val rows = VideoFrameMath.sheetRows(frames.size)
+        return VideoSheet(mediaPipeline.createMergedSpriteSheet(frames, columns), columns, rows)
+    }
+
+    private data class VideoSheet(val bitmap: Bitmap, val columns: Int, val rows: Int)
 
     private suspend fun convertOne(bitmap: Bitmap, settings: PixelArtSettings, palette: List<Int>): Bitmap =
         converterPipeline.convert(
@@ -354,13 +317,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Importa um vídeo. Valida 1:1 e extrai os quadros do intervalo escolhido. */
+    /** Importa um vídeo: lê duração e taxa, usa todos os quadros e extrai o intervalo inteiro. */
     fun importVideo(uri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isImporting = true)
             // Vídeos de qualquer proporção são aceitos: cada quadro é recortado em 1:1 pelo centro.
-            val size = withContext(Dispatchers.IO) { mediaPipeline.probeVideoSize(uri.toString()) }
-            if (size == null) {
+            val timing = withContext(Dispatchers.IO) { mediaPipeline.probeVideoTiming(uri.toString()) }
+            if (timing == null) {
                 _uiState.value = _uiState.value.copy(isImporting = false)
                 showAlert("Não foi possível ler este vídeo.")
                 return@launch
@@ -369,13 +332,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 sourceKind = SourceKind.VIDEO,
                 sourceName = "Vídeo",
+                videoTotalFrames = timing.frameCount,
+                videoSourceFps = timing.fps,
+                videoFps = timing.fps.coerceIn(1, 60),
                 videoStartFrame = 1,
-                videoEndFrame = 12,
-                currentFrameIndex = 0
+                videoEndFrame = minOf(timing.frameCount, MAX_VIDEO_FRAMES),
+                currentFrameIndex = 0,
+                isPlayingPreview = false
             )
             extractVideoFrames()
-            val count = rawVideoFrames.size
-            showAlert(if (count > 0) "$count quadros importados." else "Não foi possível extrair quadros deste vídeo.")
+            val extracted = rawVideoFrames.size
+            showAlert(
+                when {
+                    extracted == 0 -> "Não foi possível extrair quadros deste vídeo."
+                    timing.frameCount > MAX_VIDEO_FRAMES ->
+                        "$extracted quadros importados (limite de $MAX_VIDEO_FRAMES). Ajuste o intervalo para escolher outra parte."
+                    else -> "$extracted quadros importados."
+                }
+            )
         }
     }
 
@@ -408,16 +382,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------- Vídeo e timeline ----------
 
+    /** Intervalo em quadros da origem (1 based). A janela respeita o limite por importação. */
     fun setVideoInterval(start: Int, end: Int) {
-        val s = maxOf(1, start)
-        val e = maxOf(s, end).coerceAtMost(s + MAX_VIDEO_FRAMES - 1)
+        val total = _uiState.value.videoTotalFrames
+        if (total == 0) return
+        val s = start.coerceIn(1, total)
+        val e = end.coerceIn(s, minOf(total, s + MAX_VIDEO_FRAMES - 1))
         _uiState.value = _uiState.value.copy(videoStartFrame = s, videoEndFrame = e)
         scheduleVideoExtract()
     }
 
+    /** Velocidade da prévia de animação. Não reextrai os quadros. */
     fun setVideoFps(fps: Int) {
-        _uiState.value = _uiState.value.copy(videoFps = maxOf(1, minOf(30, fps)))
-        scheduleVideoExtract()
+        _uiState.value = _uiState.value.copy(videoFps = fps.coerceIn(1, 60))
     }
 
     private fun scheduleVideoExtract() {
@@ -432,14 +409,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun extractVideoFrames() {
         val uri = videoUri ?: return
         val s = _uiState.value
-        val fps = s.videoFps
-        val startMs = ((s.videoStartFrame - 1) * 1000L) / fps
-        val endMs = (s.videoEndFrame * 1000L) / fps
-        val maxFrames = (s.videoEndFrame - s.videoStartFrame + 1).coerceIn(1, MAX_VIDEO_FRAMES)
-
-        _uiState.value = _uiState.value.copy(isImporting = true)
+        _uiState.value = s.copy(isImporting = true)
         val frames = withContext(Dispatchers.IO) {
-            mediaPipeline.extractFrames(uri, startMs, endMs, fps, maxFrames, targetSide = 256)
+            mediaPipeline.extractFrames(
+                videoUriString = uri,
+                firstFrame = s.videoStartFrame - 1,
+                lastFrame = s.videoEndFrame - 1,
+                sourceFps = s.videoSourceFps,
+                maxFrames = MAX_VIDEO_FRAMES,
+                targetSide = 256
+            )
         }
         rawVideoFrames = frames
         _uiState.value = _uiState.value.copy(isImporting = false, currentFrameIndex = 0)
@@ -630,8 +609,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val info = updater.fetchLatest()
                 if (info != null && updater.isNewer(info)) {
-                    setUpdate { it.copy(info = info) }
-                    runUpdate(info)
+                    setUpdate { it.copy(stage = UpdateStage.AVAILABLE, info = info) }
                 } else {
                     setUpdate { it.copy(stage = UpdateStage.IDLE, info = null) }
                     if (manual) showAlert("Você já está com a versão mais recente.")
@@ -702,6 +680,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         /** Limite de quadros de vídeo por importação, para não estourar a memória. */
-        const val MAX_VIDEO_FRAMES = 48
+        const val MAX_VIDEO_FRAMES = 240 // 8 s a 30 fps: cabe na memória de aparelhos intermediários
     }
 }
