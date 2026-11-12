@@ -350,10 +350,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importVideo(uri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isImporting = true)
+            // Vídeos de qualquer proporção são aceitos: cada quadro é recortado em 1:1 pelo centro.
             val size = withContext(Dispatchers.IO) { mediaPipeline.probeVideoSize(uri.toString()) }
-            if (size == null || !ImageRules.isSquare(size.first, size.second)) {
+            if (size == null) {
                 _uiState.value = _uiState.value.copy(isImporting = false)
-                showAlert(ImageRules.SQUARE_ONLY_MESSAGE)
+                showAlert("Não foi possível ler este vídeo.")
                 return@launch
             }
             videoUri = uri.toString()

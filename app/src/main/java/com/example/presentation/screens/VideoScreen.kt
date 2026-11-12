@@ -201,7 +201,7 @@ fun VideoScreen(
                         testTag = "video_import_button"
                     )
                     Text(
-                        text = if (isImporting) "Extraindo quadros..." else "Vídeo 1:1 (quadrado)",
+                        text = if (isImporting) "Extraindo quadros..." else "Recorte automático 1:1 (centro)",
                         fontFamily = VT323FontFamily,
                         fontSize = 16.sp
                     )
