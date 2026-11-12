@@ -125,7 +125,12 @@ class MainActivity : ComponentActivity() {
                                                 onSettingsChange = { transform -> viewModel.updatePixelSettings(transform) },
                                                 onImagePicked = { bmp -> viewModel.setOriginalImage(bmp) },
                                                 onExportClick = { viewModel.navigateTo("export") },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
+                                                onCloseClick = { viewModel.navigateTo("desktop") },
+                                                frameCount = state.videoFrames.size.coerceAtLeast(1),
+                                                fps = state.videoFps,
+                                                onFpsChange = { f -> viewModel.setVideoFps(f) },
+                                                onQuickPlay = { viewModel.toggleVideoPlay() },
+                                                onRenderPlay = { viewModel.toggleVideoPlay() }
                                             )
                                         }
                                         "video" -> {

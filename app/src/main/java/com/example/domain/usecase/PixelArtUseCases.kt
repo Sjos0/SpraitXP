@@ -14,7 +14,14 @@ interface PixelArtConverterUseCase {
         brightness: Float,
         edgeEnhance: Float,
         paletteColorsInt: List<Int>,
-        ditherModeName: String
+        ditherModeName: String,
+        chromaModeDistance: Boolean = true,
+        chromaHueTolerance: Float = 25f,
+        chromaSatMin: Float = 0.35f,
+        chromaValMin: Float = 0.12f,
+        chromaFeather: Float = 0f,
+        chromaDespill: Boolean = false,
+        extraChromaColorsInt: IntArray = intArrayOf()
     ): Bitmap
 }
 

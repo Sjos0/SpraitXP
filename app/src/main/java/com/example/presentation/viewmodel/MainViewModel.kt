@@ -289,7 +289,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             brightness = settings.brightness,
             edgeEnhance = settings.edgeEnhance,
             paletteColorsInt = palette,
-            ditherModeName = settings.ditherMode.name
+            ditherModeName = settings.ditherMode.name,
+            chromaModeDistance = settings.chromaMode == com.example.domain.model.ChromaMode.DISTANCE,
+            chromaHueTolerance = settings.chromaHueTolerance,
+            chromaSatMin = settings.chromaSatMin,
+            chromaValMin = settings.chromaValMin,
+            chromaFeather = settings.chromaFeather,
+            chromaDespill = settings.chromaDespill,
+            extraChromaColorsInt = settings.extraChromaColors.map { it.toArgb() }.toIntArray()
         )
 
     /** Paleta predefinida, ou extraída da própria imagem no modo Auto. */

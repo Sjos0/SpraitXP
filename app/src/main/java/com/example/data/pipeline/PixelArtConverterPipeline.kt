@@ -5,10 +5,8 @@ import android.graphics.Color as AndroidColor
 import com.example.domain.usecase.PixelArtConverterUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sqrt
 
 class PixelArtConverterPipeline : PixelArtConverterUseCase {
 
@@ -30,25 +28,25 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
         brightness: Float,
         edgeEnhance: Float,
         paletteColorsInt: List<Int>,
-        ditherModeName: String
+        ditherModeName: String,
+        chromaModeDistance: Boolean,
+        chromaHueTolerance: Float,
+        chromaSatMin: Float,
+        chromaValMin: Float,
+        chromaFeather: Float,
+        chromaDespill: Boolean,
+        extraChromaColorsInt: IntArray
     ): Bitmap = withContext(Dispatchers.Default) {
-        // Redução inicial Nearest-Neighbor / Bilinear controlada
         val scaled = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, false)
         val w = scaled.width
         val h = scaled.height
         val pixels = IntArray(w * h)
         scaled.getPixels(pixels, 0, w, 0, 0, w, h)
 
-        val cr = AndroidColor.red(chromaColorInt)
-        val cg = AndroidColor.green(chromaColorInt)
-        val cb = AndroidColor.blue(chromaColorInt)
-        val maxDist = (chromaTolerance / 100f) * 441.67f // sqrt(255^2 * 3)
-
         val contrastFactor = if (contrast != 0f) {
             (259f * (contrast + 255f)) / (255f * (259f - contrast))
         } else 1.0f
 
-        // Buffer RGB para processamento
         val rBuf = FloatArray(w * h)
         val gBuf = FloatArray(w * h)
         val bBuf = FloatArray(w * h)
@@ -61,29 +59,41 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
             var g = AndroidColor.green(color).toFloat()
             var b = AndroidColor.blue(color).toFloat()
 
-            // Chroma Key
             if (chromaKeyEnabled && a > 30) {
-                val dist = sqrt(
-                    ((r - cr) * (r - cr) + (g - cg) * (g - cg) + (b - cb) * (b - cb)).toDouble()
-                ).toFloat()
-                if (dist <= maxDist) {
+                val keyedA = ChromaKey.keyedAlpha(
+                    argb = color,
+                    keyArgb = chromaColorInt,
+                    extraKeyArgb = extraChromaColorsInt,
+                    modeDistance = chromaModeDistance,
+                    distanceTolerance = chromaTolerance,
+                    hueTolerance = chromaHueTolerance,
+                    satMin = chromaSatMin,
+                    valMin = chromaValMin,
+                    feather = chromaFeather
+                )
+                if (keyedA == 0) {
                     aBuf[i] = 0
                     rBuf[i] = 0f
                     gBuf[i] = 0f
                     bBuf[i] = 0f
                     continue
                 }
+                aBuf[i] = if (keyedA < 255) min(a, keyedA) else a
+            } else {
+                aBuf[i] = a
             }
-            aBuf[i] = a
 
-            // Brilho
+            if (chromaDespill && aBuf[i] > 0) {
+                val ds = ChromaKey.despill(r, g, b)
+                r = ds[0]; g = ds[1]; b = ds[2]
+            }
+
             if (brightness != 0f) {
                 r += brightness
                 g += brightness
                 b += brightness
             }
 
-            // Contraste
             if (contrast != 0f) {
                 r = contrastFactor * (r - 128f) + 128f
                 g = contrastFactor * (g - 128f) + 128f
@@ -95,7 +105,6 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
             bBuf[i] = min(255f, max(0f, b))
         }
 
-        // Realce de Bordas (Edge Enhancement)
         if (edgeEnhance > 0f) {
             val factor = (edgeEnhance / 100f) * 0.4f
             for (y in 1 until h - 1) {
@@ -159,7 +168,6 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
                         val errG = oldG - AndroidColor.green(newColor)
                         val errB = oldB - AndroidColor.blue(newColor)
 
-                        // Distribui erro Floyd-Steinberg: (x+1, y) 7/16, (x-1, y+1) 3/16, (x, y+1) 5/16, (x+1, y+1) 1/16
                         if (x + 1 < w) {
                             val rightIdx = y * w + (x + 1)
                             rBuf[rightIdx] = min(255f, max(0f, rBuf[rightIdx] + errR * 7f / 16f))
@@ -188,7 +196,7 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
                     }
                 }
             }
-            else -> { // NONE
+            else -> {
                 for (i in 0 until (w * h)) {
                     if (aBuf[i] == 0) {
                         resultPixels[i] = AndroidColor.TRANSPARENT
