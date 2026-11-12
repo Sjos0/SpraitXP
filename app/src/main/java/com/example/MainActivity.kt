@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
                                                 onShowAbout = {
                                                     viewModel.showAlert("SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa (Clean Architecture)\nCompatível com Android 8.0+")
                                                 },
+                                                onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
                                         }

@@ -50,6 +50,7 @@ fun SettingsScreen(
     onSoundChange: (Boolean) -> Unit,
     onLanguageChange: (String) -> Unit,
     onShowAbout: () -> Unit,
+    onCheckUpdates: () -> Unit,
     onCloseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -165,6 +166,13 @@ fun SettingsScreen(
                         onClick = onShowAbout,
                         modifier = Modifier.width(140.dp),
                         testTag = "settings_about_button"
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    XpButton(
+                        text = "⟳ Atualizar",
+                        onClick = onCheckUpdates,
+                        modifier = Modifier.width(140.dp),
+                        testTag = "settings_update_button"
                     )
                 }
 
