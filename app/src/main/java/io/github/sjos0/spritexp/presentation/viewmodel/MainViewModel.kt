@@ -120,6 +120,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Quadros originais do vídeo (já reduzidos), antes da conversão para pixel art. */
     private var rawVideoFrames: List<Bitmap> = emptyList()
+
+    /** Intervalo da origem (1 based, inclusivo) que os quadros de [rawVideoFrames] representam. */
+    private var rawRangeStart: Int = 1
+    private var rawRangeEnd: Int = 0
     private var videoUri: String? = null
 
     init {
@@ -197,7 +201,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun requestPixelConversion() {
         val snapshot = _uiState.value
         val original = snapshot.originalBitmap
-        val frames = rawVideoFrames
+        val frames = if (snapshot.sourceKind == SourceKind.VIDEO) activeRawFrames(snapshot) else emptyList()
         if (original == null && frames.isEmpty()) return
 
         val settings = snapshot.pixelSettings
@@ -382,14 +386,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------- Vídeo e timeline ----------
 
-    /** Intervalo em quadros da origem (1 based). A janela respeita o limite por importação. */
+    /**
+     * Intervalo em quadros da origem (1 based), limitado ao máximo por importação.
+     * Se os quadros do intervalo já estão em memória, só reconverte (sem reimportar o vídeo).
+     * Só extrai de novo quando o intervalo sai do que foi carregado.
+     */
     fun setVideoInterval(start: Int, end: Int) {
         val total = _uiState.value.videoTotalFrames
         if (total == 0) return
         val s = start.coerceIn(1, total)
         val e = end.coerceIn(s, minOf(total, s + MAX_VIDEO_FRAMES - 1))
         _uiState.value = _uiState.value.copy(videoStartFrame = s, videoEndFrame = e)
-        scheduleVideoExtract()
+        if (VideoFrameMath.localIndices(rawRangeStart, rawRangeEnd, s, e) != null) {
+            videoJob?.cancel() // uma extração pendente não é mais necessária
+            scheduleDebouncedConversion()
+        } else {
+            scheduleVideoExtract()
+        }
+    }
+
+    /** Quadros da origem dentro do intervalo atual, fatiados do buffer já extraído. */
+    private fun activeRawFrames(state: MainUiState): List<Bitmap> {
+        val r = VideoFrameMath.localIndices(rawRangeStart, rawRangeEnd, state.videoStartFrame, state.videoEndFrame)
+            ?: return emptyList()
+        if (r.first >= rawVideoFrames.size) return emptyList()
+        return rawVideoFrames.subList(r.first, minOf(r.last + 1, rawVideoFrames.size))
     }
 
     /** Velocidade da prévia de animação. Não reextrai os quadros. */
@@ -421,6 +442,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         rawVideoFrames = frames
+        rawRangeStart = s.videoStartFrame
+        rawRangeEnd = s.videoStartFrame + frames.size - 1
         _uiState.value = _uiState.value.copy(isImporting = false, currentFrameIndex = 0)
         requestPixelConversion()
     }
@@ -669,7 +692,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Quadro original atual (posição da animação). Cai para a imagem de demonstração se não houver vídeo. */
     fun currentRawFrame(): Bitmap? {
         val s = _uiState.value
-        return rawVideoFrames.getOrNull(s.currentFrameIndex) ?: s.originalBitmap
+        return activeRawFrames(s).getOrNull(s.currentFrameIndex) ?: s.originalBitmap
     }
 
     /** Quadro convertido na mesma posição da animação. */

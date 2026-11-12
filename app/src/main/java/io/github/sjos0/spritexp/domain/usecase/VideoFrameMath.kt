@@ -21,6 +21,17 @@ object VideoFrameMath {
     fun frameTimeUs(index: Int, fps: Int): Long =
         index * 1_000_000L / fps.coerceIn(1, MAX_FPS)
 
+    /**
+     * Índices (0 based) dentro do buffer que cobre [rawStart..rawEnd] (1 based, inclusivo),
+     * ou null quando [start..end] não cabe nele e é preciso extrair de novo.
+     */
+    fun localIndices(rawStart: Int, rawEnd: Int, start: Int, end: Int): IntRange? =
+        if (rawEnd >= rawStart && start >= rawStart && end <= rawEnd && start <= end) {
+            (start - rawStart)..(end - rawStart)
+        } else {
+            null
+        }
+
     fun sheetColumns(count: Int): Int = ceil(sqrt(count.coerceAtLeast(1).toDouble())).toInt()
 
     fun sheetRows(count: Int): Int {
