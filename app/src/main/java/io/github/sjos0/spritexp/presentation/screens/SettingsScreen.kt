@@ -125,8 +125,9 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Text(
-                            text = if (soundEnabled) "Ativado 🟩" else "Desativado ⬜",
+                            text = if (soundEnabled) "Ativado" else "Desativado",
                             fontFamily = PixelifyFontFamily,
+                            color = XpTextBlack,
                             fontSize = 14.sp
                         )
                     }
