@@ -35,6 +35,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissAlert() },
             containerColor = XpBeige,
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("SpriteXP") },
             text = { Text(message) },
             confirmButton = { TextButton(onClick = { viewModel.dismissAlert() }) { Text("OK") } }
@@ -48,6 +50,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
             AlertDialog(
                 onDismissRequest = { viewModel.dismissUpdate() },
                 containerColor = XpBeige,
+                titleContentColor = Color.Black,
+                textContentColor = Color.Black,
                 title = { Text("Nova versão disponível") },
                 text = { Text("A versão ${info.tag} está disponível. Deseja atualizar agora?") },
                 confirmButton = { TextButton(onClick = { viewModel.startUpdate() }) { Text("Atualizar") } },
@@ -58,6 +62,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         UpdateStage.NEED_PERMISSION -> AlertDialog(
             onDismissRequest = { viewModel.dismissUpdate() },
             containerColor = XpBeige,
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Permitir instalação") },
             text = {
                 Text(
@@ -78,6 +84,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         UpdateStage.DOWNLOADING -> AlertDialog(
             onDismissRequest = {},
             containerColor = XpBeige,
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Baixando atualização ${info?.tag ?: ""}".trim()) },
             text = {
                 Column {
@@ -103,6 +111,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         UpdateStage.INSTALLING -> AlertDialog(
             onDismissRequest = {},
             containerColor = XpBeige,
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Instalar atualização") },
             text = { Text("Abrindo o instalador do Android. Confirme a instalação na tela do sistema.") },
             confirmButton = {}
@@ -111,6 +121,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         UpdateStage.ERROR -> AlertDialog(
             onDismissRequest = { viewModel.dismissUpdate() },
             containerColor = XpBeige,
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Erro na atualização") },
             text = { Text(state.message ?: "Não foi possível concluir a atualização.") },
             confirmButton = {

@@ -399,6 +399,8 @@ private fun PresetsDialog(
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = Color(0xFFECE9D8),
+        titleContentColor = Color.Black,
+        textContentColor = Color.Black,
         title = { Text(text = "Presets", fontFamily = PixelifyFontFamily, color = Color(0xFF0A246A)) },
         text = {
             Column(
@@ -482,6 +484,8 @@ private fun PresetsDialog(
         AlertDialog(
             onDismissRequest = { pending = null },
             containerColor = Color(0xFFECE9D8),
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Tem certeza?") },
             text = {
                 Text(
