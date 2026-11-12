@@ -18,4 +18,33 @@ class UpdateVersionTest {
         assertNull(UpdateVersion.buildNumberFromTag("beta"))
         assertNull(UpdateVersion.buildNumberFromTag("v1.0"))
     }
+
+    @Test
+    fun parsesZeroBuildNumber() {
+        assertEquals(0, UpdateVersion.buildNumberFromTag("v1.0.0"))
+    }
+
+    @Test
+    fun parsesTwoDigitBuildNumber() {
+        assertEquals(10, UpdateVersion.buildNumberFromTag("v2.1.10"))
+    }
+
+    @Test
+    fun parsesLeadingZerosAsInteger() {
+        assertEquals(7, UpdateVersion.buildNumberFromTag("v1.0.007"))
+    }
+
+    @Test
+    fun rejectsInvalidTags() {
+        assertNull(UpdateVersion.buildNumberFromTag("v1.0.3-beta"))
+        assertNull(UpdateVersion.buildNumberFromTag(""))
+        assertNull(UpdateVersion.buildNumberFromTag("1.0.3"))
+        assertNull(UpdateVersion.buildNumberFromTag("v1.0.3.1"))
+    }
+
+    @Test
+    fun acceptsSurroundingWhitespace() {
+        assertEquals(12, UpdateVersion.buildNumberFromTag("  v1.0.12  "))
+        assertEquals(0, UpdateVersion.buildNumberFromTag("\tv1.0.0\n"))
+    }
 }

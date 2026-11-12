@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -38,7 +38,8 @@ sealed interface InstallEvent {
 }
 
 object InstallEvents {
-    val events = MutableSharedFlow<InstallEvent>(extraBufferCapacity = 8)
+    /** Fila sem limite: o resultado fica guardado até a tela consumir. */
+    val events = Channel<InstallEvent>(Channel.UNLIMITED)
 }
 
 object UpdateVersion {

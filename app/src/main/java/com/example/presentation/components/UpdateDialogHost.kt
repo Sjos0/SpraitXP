@@ -80,8 +80,8 @@ fun UpdateDialogHost(viewModel: MainViewModel) {
         UpdateStage.ERROR -> AlertDialog(
             onDismissRequest = { viewModel.dismissUpdate() },
             containerColor = XpBeige,
-            title = { Text("Atualização") },
-            text = { Text(state.message ?: "Algo deu errado na atualização.") },
+            title = { Text("Erro na atualização") },
+            text = { Text(state.message ?: "Não foi possível concluir a atualização.") },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissUpdate() }) { Text("OK") }
             }

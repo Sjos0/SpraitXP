@@ -16,10 +16,14 @@ class InstallResultReceiver : BroadcastReceiver() {
                 if (confirm != null) {
                     confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(confirm)
+                } else {
+                    InstallEvents.events.trySend(
+                        InstallEvent.Failed("o Android não enviou a tela de confirmação")
+                    )
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> InstallEvents.events.tryEmit(InstallEvent.Installed)
-            else -> InstallEvents.events.tryEmit(
+            PackageInstaller.STATUS_SUCCESS -> InstallEvents.events.trySend(InstallEvent.Installed)
+            else -> InstallEvents.events.trySend(
                 InstallEvent.Failed(
                     intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                         ?: "motivo desconhecido"

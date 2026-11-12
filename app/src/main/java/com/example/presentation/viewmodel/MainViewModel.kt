@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -587,7 +588,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Recebe o resultado da instalação enviado pelo PackageInstaller. */
     private fun observeInstallEvents() {
         viewModelScope.launch {
-            InstallEvents.events.collect { event ->
+            InstallEvents.events.receiveAsFlow().collect { event ->
                 when (event) {
                     InstallEvent.Installed -> setUpdate { it.copy(stage = UpdateStage.IDLE) }
                     is InstallEvent.Failed -> setUpdate {
