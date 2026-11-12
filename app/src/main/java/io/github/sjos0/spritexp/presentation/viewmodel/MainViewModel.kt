@@ -15,6 +15,7 @@ import io.github.sjos0.spritexp.data.pipeline.MediaProcessingPipeline
 import io.github.sjos0.spritexp.data.update.AppUpdater
 import io.github.sjos0.spritexp.data.update.InstallEvent
 import io.github.sjos0.spritexp.data.update.InstallEvents
+import io.github.sjos0.spritexp.data.update.ReleaseInfo
 import io.github.sjos0.spritexp.data.update.UpdateStage
 import io.github.sjos0.spritexp.data.update.UpdateUiState
 import io.github.sjos0.spritexp.data.pipeline.PaletteExtractor
