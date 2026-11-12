@@ -26,23 +26,27 @@ jobs:
         with:
           gradle-version: "9.3.1"
 
-      - name: Chaves de CI (debug e upload)
+      - name: Chave de debug
         run: |
           keytool -genkeypair -keystore debug.keystore -storepass android -keypass android \
             -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          keytool -genkeypair -keystore my-upload-key.jks -storepass ci-spritexp -keypass ci-spritexp \
-            -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=SpriteXP,O=SpriteXP,C=BR"
+
+      - name: Chave de release (estável, vem dos secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.SPRITEXP_KEYSTORE_B64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/spritexp-release.jks"
 
       - name: Testes unitários
         run: gradle :app:testDebugUnitTest --no-daemon
 
       - name: APK de release
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
-          STORE_PASSWORD: ci-spritexp
-          KEY_PASSWORD: ci-spritexp
+          KEYSTORE_PATH: ${{ runner.temp }}/spritexp-release.jks
+          STORE_PASSWORD: ${{ secrets.SPRITEXP_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.SPRITEXP_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
         run: gradle :app:assembleRelease --no-daemon
 
       - name: Renomear APK

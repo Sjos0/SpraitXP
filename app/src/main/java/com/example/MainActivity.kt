@@ -2,6 +2,7 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import com.example.presentation.components.UpdateDialogHost
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
@@ -54,6 +55,8 @@ class MainActivity : ComponentActivity() {
             val sheetPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                 if (uri != null) viewModel.importSpriteSheet(uri)
             }
+
+            UpdateDialogHost(viewModel = viewModel)
 
             SpriteXPTheme(darkTheme = state.isDarkTheme) {
                 // Manipulador de botão voltar do Android (BackHandler)
@@ -199,6 +202,7 @@ class MainActivity : ComponentActivity() {
                                                 onShowAbout = {
                                                     viewModel.showAlert("SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa (Clean Architecture)\nCompatível com Android 8.0+")
                                                 },
+                                                onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
                                                 onCloseClick = { viewModel.navigateTo("desktop") }
                                             )
                                         }
