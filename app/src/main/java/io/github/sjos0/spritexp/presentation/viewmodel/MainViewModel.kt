@@ -30,7 +30,9 @@ import io.github.sjos0.spritexp.domain.usecase.ImageRules
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +61,7 @@ data class MainUiState(
     val sourceKind: SourceKind = SourceKind.DEMO,
     val sourceName: String = "",
     val isImporting: Boolean = false,
+    val importProgress: Float = 0f,
 
     // Conversor Imagem
     val originalBitmap: Bitmap? = null,
@@ -124,6 +127,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Intervalo da origem (1 based, inclusivo) que os quadros de [rawVideoFrames] representam. */
     private var rawRangeStart: Int = 1
     private var rawRangeEnd: Int = 0
+
+    /** Verdadeiro enquanto uma extração de quadros está em andamento. */
+    private var extractInFlight: Boolean = false
     private var videoUri: String? = null
 
     init {
@@ -430,22 +436,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun extractVideoFrames() {
         val uri = videoUri ?: return
         val s = _uiState.value
-        _uiState.value = s.copy(isImporting = true)
-        val frames = withContext(Dispatchers.IO) {
-            mediaPipeline.extractFrames(
-                videoUriString = uri,
-                firstFrame = s.videoStartFrame - 1,
-                lastFrame = s.videoEndFrame - 1,
-                sourceFps = s.videoSourceFps,
-                maxFrames = MAX_VIDEO_FRAMES,
-                targetSide = 256
-            )
+        extractInFlight = true
+        _uiState.update { it.copy(isImporting = true, importProgress = 0f) }
+        var extracted = false
+        try {
+            val frames = withContext(Dispatchers.IO) {
+                mediaPipeline.extractFrames(
+                    videoUriString = uri,
+                    firstFrame = s.videoStartFrame - 1,
+                    lastFrame = s.videoEndFrame - 1,
+                    sourceFps = s.videoSourceFps,
+                    maxFrames = MAX_VIDEO_FRAMES,
+                    targetSide = 256,
+                    onProgress = { p -> _uiState.update { it.copy(importProgress = p) } }
+                )
+            }
+            rawVideoFrames = frames
+            rawRangeStart = s.videoStartFrame
+            rawRangeEnd = s.videoStartFrame + frames.size - 1
+            _uiState.update { it.copy(currentFrameIndex = 0) }
+            extracted = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.e(tag, "Falha ao extrair quadros", e)
+            showAlert("Não foi possível extrair os quadros deste vídeo. Tente um intervalo menor.")
+        } finally {
+            // Sempre limpa o progresso, mesmo com erro ou cancelamento: o botão nunca fica preso.
+            extractInFlight = false
+            _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
         }
-        rawVideoFrames = frames
-        rawRangeStart = s.videoStartFrame
-        rawRangeEnd = s.videoStartFrame + frames.size - 1
-        _uiState.value = _uiState.value.copy(isImporting = false, currentFrameIndex = 0)
-        requestPixelConversion()
+        if (extracted) requestPixelConversion()
     }
 
     fun selectVideoFrame(index: Int) {

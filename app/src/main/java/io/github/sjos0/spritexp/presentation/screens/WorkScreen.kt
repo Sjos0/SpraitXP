@@ -68,6 +68,7 @@ import io.github.sjos0.spritexp.presentation.components.XpButton
 import io.github.sjos0.spritexp.presentation.components.XpGroupBox
 import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
+import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
 
 private val DarkBg = Color(0xFF1A1A1E)
 private val PanelBg = Color(0xFF2A2A2E)
@@ -105,6 +106,7 @@ fun WorkScreen(
     endFrame: Int,
     sourceFrameCount: Int,
     isImporting: Boolean,
+    importProgress: Float,
     onPickVideo: () -> Unit,
     onTogglePlay: () -> Unit,
     onFpsChange: (Int) -> Unit,
@@ -160,13 +162,16 @@ fun WorkScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             XpButton(
-                text = if (isImporting) "Importando vídeo..." else "Importar vídeo",
+                text = if (isImporting) "Importando… ${(importProgress * 100).toInt()}%" else "Importar vídeo",
                 onClick = onPickVideo,
                 isPrimaryGreen = true,
                 enabled = !isImporting,
                 modifier = Modifier.fillMaxWidth(),
                 testTag = "work_import_video"
             )
+            if (isImporting) {
+                XpSegmentedProgressBar(progress = importProgress, modifier = Modifier.fillMaxWidth())
+            }
 
             Preview(
                 originalFrame = originalFrame,

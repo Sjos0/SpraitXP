@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
                                         sourceFrameCount = state.videoTotalFrames,
                                         endFrame = state.videoEndFrame,
                                         isImporting = state.isImporting,
+                                        importProgress = state.importProgress,
                                         onPickVideo = { videoPicker.launch("video/*") },
                                         onTogglePlay = { viewModel.toggleVideoPlay() },
                                         onFpsChange = { viewModel.setVideoFps(it) },

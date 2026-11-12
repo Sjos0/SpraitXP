@@ -110,13 +110,15 @@ class MediaProcessingPipeline(private val context: Context) :
         lastFrame: Int,
         sourceFps: Int,
         maxFrames: Int,
-        targetSide: Int
+        targetSide: Int,
+        onProgress: (Float) -> Unit
     ): List<Bitmap> = withContext(Dispatchers.IO) {
         val frames = mutableListOf<Bitmap>()
         val retriever = MediaMetadataRetriever()
         try {
             setSource(retriever, videoUriString)
             val last = minOf(lastFrame, firstFrame + maxFrames - 1)
+            val total = (last - firstFrame.coerceAtLeast(0) + 1).coerceAtLeast(1)
             for (index in firstFrame.coerceAtLeast(0)..last) {
                 // Pede cada quadro pelo instante exato (OPTION_CLOSEST), sem parar no keyframe.
                 val frame = retriever.getFrameAtTime(
@@ -124,6 +126,7 @@ class MediaProcessingPipeline(private val context: Context) :
                     MediaMetadataRetriever.OPTION_CLOSEST
                 ) ?: break
                 frames.add(squareCropCenter(frame, targetSide))
+                onProgress(frames.size.toFloat() / total)
             }
         } catch (e: Exception) {
             Log.e(tag, "Falha ao extrair quadros", e)

@@ -36,7 +36,8 @@ interface VideoFrameExtractorUseCase {
         lastFrame: Int,
         sourceFps: Int,
         maxFrames: Int,
-        targetSide: Int
+        targetSide: Int,
+        onProgress: (Float) -> Unit
     ): List<Bitmap>
 }
 
