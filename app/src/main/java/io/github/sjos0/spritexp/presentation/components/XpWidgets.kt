@@ -1,5 +1,10 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -111,6 +116,7 @@ fun XpSlider(
     modifier: Modifier = Modifier,
     displayFormatter: (Float) -> String = { "%.0f".format(it) }
 ) {
+    var editing by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -129,7 +135,8 @@ fun XpSlider(
                 color = LunaTitleStart,
                 fontFamily = VT323FontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
+                fontSize = 20.sp,
+                modifier = Modifier.clickable { editing = true }.padding(start = 8.dp)
             )
         }
         Slider(
@@ -143,6 +150,62 @@ fun XpSlider(
             )
         )
     }
+    if (editing) {
+        NumericEditDialog(
+            label = label,
+            current = value,
+            valueRange = valueRange,
+            onConfirm = { onValueChange(it); editing = false },
+            onDismiss = { editing = false }
+        )
+    }
+}
+
+/**
+ * Digitar o valor exato. Aceita só número; fora do intervalo é ajustado para o limite mais próximo.
+ */
+@Composable
+private fun NumericEditDialog(
+    label: String,
+    current: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onConfirm: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val integerRange = valueRange.start % 1f == 0f && valueRange.endInclusive % 1f == 0f
+    fun fmt(v: Float): String = if (integerRange) v.toInt().toString() else "%.2f".format(v)
+    var text by remember { mutableStateOf(fmt(current)) }
+    val parsed = text.replace(',', '.').toFloatOrNull()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = XpWindowBg,
+        title = { Text(text = "Editar $label", fontFamily = PixelifyFontFamily, color = LunaTitleStart) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { raw -> text = raw.filter { it.isDigit() || it == '.' || it == ',' || it == '-' }.take(8) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = parsed == null,
+                supportingText = {
+                    Text(
+                        text = if (parsed == null) "Digite um número."
+                        else "Entre ${fmt(valueRange.start)} e ${fmt(valueRange.endInclusive)}.",
+                        fontSize = 11.sp
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = parsed != null,
+                onClick = { parsed?.let { onConfirm(it.coerceIn(valueRange)) } }
+            ) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }
 
 /**
