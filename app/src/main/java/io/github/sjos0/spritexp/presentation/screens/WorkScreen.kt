@@ -74,7 +74,7 @@ private val DarkBg = Color(0xFF1A1A1E)
 private val PanelBg = Color(0xFF2A2A2E)
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
-private val Muted = Color(0xFFBBBBBB)
+private val Muted = Color(0xFFD0D0D0)
 /** Texto de apoio sobre superfícies claras (GroupBox): cinza escuro para contraste. */
 private val HintOnLight = Color(0xFF4A4A4A)
 
@@ -307,7 +307,7 @@ private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit)
                     modifier = Modifier.width(140.dp),
                     testTag = "enlarge_play"
                 )
-                Text(text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
             }
         }
     }
@@ -338,7 +338,7 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "SpriteXP",
             color = Color.White,
             fontWeight = FontWeight.Bold,
@@ -409,7 +409,7 @@ private fun PreviewPanel(
 ) {
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = if (picking) "$title (toque para escolher a cor)" else title,
             color = if (picking) Gold else Color.White,
             fontWeight = FontWeight.Bold,
@@ -442,14 +442,14 @@ private fun PreviewPanel(
             contentAlignment = Alignment.Center
         ) {
             when {
-                loading -> Text(text = "Convertendo...", color = Color.White, fontSize = 12.sp)
+                loading -> Text(fontFamily = PixelifyFontFamily, text = "Convertendo...", color = Color.White, fontSize = 12.sp)
                 bitmap != null -> Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                else -> Text(text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
+                else -> Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
             }
         }
     }
@@ -491,7 +491,7 @@ private fun PlaybackBar(
             modifier = Modifier.width(120.dp),
             testTag = "work_play"
         )
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "Quadro ${currentIndex + 1}/$frameCount",
             color = Color.White,
             fontSize = 13.sp
@@ -527,7 +527,7 @@ private fun AnimationPanel(
                     displayFormatter = { "${it.toInt()}" }
                 )
             } else {
-                Text(text = "Importe um vídeo para escolher o intervalo.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo para escolher o intervalo.", color = HintOnLight, fontSize = 12.sp)
             }
             XpSlider(
                 label = "FPS",
@@ -543,7 +543,7 @@ private fun AnimationPanel(
 @Composable
 private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit) {
     if (frames.isEmpty()) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "Importe um vídeo para ver os quadros.",
             color = Muted,
             fontSize = 12.sp
@@ -646,7 +646,7 @@ private fun AdjustmentsPanel(
                     testTag = "work_eyedropper"
                 )
             }
-            Text(
+            Text(fontFamily = PixelifyFontFamily, 
                 text = if (picking) "Toque na imagem ORIGINAL no pixel do fundo." else "Escolha a cor do fundo tocando na imagem.",
                 color = HintOnLight,
                 fontSize = 11.sp
@@ -752,7 +752,7 @@ private fun AdjustmentsPanel(
                 suffix = "x",
                 onPick = { s -> onSettingsChange { it.copy(displayScale = s) } }
             )
-            Text(
+            Text(fontFamily = PixelifyFontFamily, 
                 text = "Saída: ${settings.targetResolution * settings.displayScale} px",
                 color = HintOnLight,
                 fontSize = 12.sp
@@ -809,7 +809,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
             }
             val swatches = settings.palettePreset.colors
             if (swatches.isNotEmpty()) {
-                Text(text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -882,11 +882,11 @@ private fun ExportPanel(
                 }
             }
             if (!hasFrames) {
-                Text(text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
         XpCollapsibleGroupBox(title = "Automator") {
-            Text(text = "Em breve", color = HintOnLight, fontSize = 12.sp)
+            Text(fontFamily = PixelifyFontFamily, text = "Em breve", color = HintOnLight, fontSize = 12.sp)
         }
     }
 }
@@ -926,7 +926,7 @@ private fun AnalyzerPanel(
                         contentScale = ContentScale.Fit
                     )
                 }
-                Text(text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
                 XpSlider(
                     label = "Início",
                     value = start.toFloat(),
@@ -942,7 +942,7 @@ private fun AnalyzerPanel(
                     displayFormatter = { "${it.toInt()}" }
                 )
             } else {
-                Text(text = "Abra uma sprite sheet 1:1 para analisar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Abra uma sprite sheet 1:1 para analisar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
     }
