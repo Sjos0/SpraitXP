@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.viewmodel
 
+import io.github.sjos0.spritexp.domain.model.SettingsPreset
+import io.github.sjos0.spritexp.data.repository.PresetRepository
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
@@ -104,6 +106,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val converterPipeline = PixelArtConverterPipeline()
     private val mediaPipeline = MediaProcessingPipeline(application)
     val projectRepository: ProjectRepository = JsonProjectRepository(application)
+
+    private val presetRepository = PresetRepository(application)
+    private val _presets = MutableStateFlow<List<SettingsPreset>>(emptyList())
+
+    /** Presets salvos em Download/SpriteXP/presets.json. */
+    val presets: StateFlow<List<SettingsPreset>> = _presets.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _presets.value = withContext(Dispatchers.IO) { presetRepository.load() }
+        }
+    }
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -251,6 +265,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // A prévia nunca fica presa em "Convertendo..." (sucesso, erro ou cancelamento).
                 if (version == conversionVersion) _uiState.update { it.copy(isConverting = false) }
             }
+        }
+    }
+
+    /** Salva os ajustes atuais (Ajustes, Paleta e FPS) como um preset novo. */
+    fun savePreset(rawName: String) {
+        val name = rawName.trim().take(40)
+        if (name.isEmpty()) {
+            showAlert("Dê um nome ao preset.")
+            return
+        }
+        val s = _uiState.value
+        val preset = SettingsPreset(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            createdAt = System.currentTimeMillis(),
+            settings = s.pixelSettings,
+            videoFps = s.videoFps
+        )
+        persistPresets(_presets.value + preset, "Preset \"$name\" salvo.")
+    }
+
+    /** Troca os ajustes de um preset pelos atuais. */
+    fun overwritePreset(id: String) {
+        val s = _uiState.value
+        val updated = _presets.value.map {
+            if (it.id == id) it.copy(settings = s.pixelSettings, videoFps = s.videoFps, createdAt = System.currentTimeMillis()) else it
+        }
+        persistPresets(updated, "Preset atualizado com os ajustes atuais.")
+    }
+
+    fun deletePreset(id: String) {
+        persistPresets(_presets.value.filterNot { it.id == id }, "Preset excluído.")
+    }
+
+    /** Aplica settings e FPS do preset e refaz a conversão. Não reimporta o vídeo. */
+    fun applyPreset(id: String) {
+        val preset = _presets.value.firstOrNull { it.id == id } ?: return
+        _uiState.update { it.copy(pixelSettings = preset.settings, videoFps = preset.videoFps.coerceIn(1, 60)) }
+        scheduleDebouncedConversion()
+        showAlert("Preset \"${preset.name}\" aplicado.")
+    }
+
+    private fun persistPresets(list: List<SettingsPreset>, okMessage: String) {
+        _presets.value = list
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { presetRepository.save(list) }
+            showAlert(if (saved) okMessage else "Não foi possível salvar os presets em ${SpriteXpStorage.DISPLAY_DIR}.")
         }
     }
 

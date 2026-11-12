@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.uiState.collectAsState()
             val projects by viewModel.projectsFlow.collectAsState(initial = emptyList())
+            val presets by viewModel.presets.collectAsState()
 
             val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                 if (uri != null) viewModel.importVideo(uri)
@@ -110,6 +111,11 @@ class MainActivity : ComponentActivity() {
                                         endFrame = state.videoEndFrame,
                                         isImporting = state.isImporting,
                                         importProgress = state.importProgress,
+                                        presets = presets,
+                                        onSavePreset = { viewModel.savePreset(it) },
+                                        onOverwritePreset = { viewModel.overwritePreset(it) },
+                                        onDeletePreset = { viewModel.deletePreset(it) },
+                                        onApplyPreset = { viewModel.applyPreset(it) },
                                         onPickVideo = { videoPicker.launch("video/*") },
                                         onTogglePlay = { viewModel.toggleVideoPlay() },
                                         onFpsChange = { viewModel.setVideoFps(it) },

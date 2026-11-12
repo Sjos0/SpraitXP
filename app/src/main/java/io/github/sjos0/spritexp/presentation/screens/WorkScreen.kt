@@ -1,5 +1,13 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import io.github.sjos0.spritexp.domain.model.SettingsPreset
 import io.github.sjos0.spritexp.presentation.components.XpCollapsibleGroupBox
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
@@ -126,6 +134,11 @@ fun WorkScreen(
     onPickSheet: () -> Unit,
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
+    presets: List<SettingsPreset>,
+    onSavePreset: (String) -> Unit,
+    onOverwritePreset: (String) -> Unit,
+    onDeletePreset: (String) -> Unit,
+    onApplyPreset: (String) -> Unit,
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -207,12 +220,21 @@ fun WorkScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             when (tab) {
-                WorkTab.AJUSTES -> AdjustmentsPanel(
-                    settings = settings,
-                    onSettingsChange = onSettingsChange,
-                    picking = picking,
-                    onTogglePicking = { picking = !picking }
-                )
+                WorkTab.AJUSTES -> {
+                    AdjustmentsPanel(
+                        settings = settings,
+                        onSettingsChange = onSettingsChange,
+                        picking = picking,
+                        onTogglePicking = { picking = !picking }
+                    )
+                    PresetsSection(
+                        presets = presets,
+                        onSave = onSavePreset,
+                        onOverwrite = onOverwritePreset,
+                        onDelete = onDeletePreset,
+                        onApply = onApplyPreset
+                    )
+                }
                 WorkTab.ANIMACAO -> AnimationPanel(
                     sourceFrameCount = sourceFrameCount,
                     startFrame = startFrame,
@@ -326,6 +348,139 @@ private fun Modifier.checkerboard(): Modifier = this.drawBehind {
                 size = Size(cell, cell)
             )
         }
+    }
+}
+
+/** Botão Presets: abre a janela de salvar, carregar, sobrescrever e excluir. */
+@Composable
+private fun PresetsSection(
+    presets: List<SettingsPreset>,
+    onSave: (String) -> Unit,
+    onOverwrite: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onApply: (String) -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    XpButton(
+        text = "Presets…",
+        onClick = { open = true },
+        modifier = Modifier.fillMaxWidth(),
+        testTag = "work_presets"
+    )
+    if (open) {
+        PresetsDialog(
+            presets = presets,
+            onSave = onSave,
+            onOverwrite = onOverwrite,
+            onDelete = onDelete,
+            onApply = onApply,
+            onClose = { open = false }
+        )
+    }
+}
+
+private enum class PresetAction { OVERWRITE, DELETE }
+
+@Composable
+private fun PresetsDialog(
+    presets: List<SettingsPreset>,
+    onSave: (String) -> Unit,
+    onOverwrite: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onApply: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    var newName by remember { mutableStateOf("") }
+    var pending by remember { mutableStateOf<Pair<PresetAction, SettingsPreset>?>(null) }
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = Color(0xFFECE9D8),
+        title = { Text(text = "Presets", fontFamily = PixelifyFontFamily, color = Color(0xFF0A246A)) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it.take(40) },
+                    singleLine = true,
+                    label = { Text(text = "Nome do novo preset", fontFamily = PixelifyFontFamily) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                XpButton(
+                    text = "Salvar novo",
+                    onClick = { onSave(newName); newName = "" },
+                    enabled = newName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (presets.isEmpty()) {
+                    Text(
+                        text = "Nenhum preset salvo ainda.",
+                        color = HintOnLight,
+                        fontFamily = PixelifyFontFamily,
+                        fontSize = 12.sp
+                    )
+                }
+                presets.forEach { preset ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF808080)).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = preset.name, color = Color.Black, fontFamily = PixelifyFontFamily, fontSize = 14.sp)
+                        Text(
+                            text = "Salvo em ${dateFormat.format(Date(preset.createdAt))} · ${preset.videoFps} fps",
+                            color = HintOnLight,
+                            fontFamily = PixelifyFontFamily,
+                            fontSize = 11.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            XpButton(
+                                text = "Carregar",
+                                onClick = { onApply(preset.id); onClose() },
+                                modifier = Modifier.weight(1f)
+                            )
+                            XpButton(
+                                text = "Sobrescrever",
+                                onClick = { pending = PresetAction.OVERWRITE to preset },
+                                modifier = Modifier.weight(1f)
+                            )
+                            XpButton(
+                                text = "Excluir",
+                                onClick = { pending = PresetAction.DELETE to preset },
+                                isDangerOrange = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Fechar") } }
+    )
+
+    pending?.let { (action, preset) ->
+        val isDelete = action == PresetAction.DELETE
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            containerColor = Color(0xFFECE9D8),
+            title = { Text("Tem certeza?") },
+            text = {
+                Text(
+                    if (isDelete) "O preset \"${preset.name}\" será excluído."
+                    else "O preset \"${preset.name}\" será substituído pelos ajustes atuais."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (isDelete) onDelete(preset.id) else onOverwrite(preset.id)
+                    pending = null
+                }) { Text(if (isDelete) "Excluir" else "Sobrescrever") }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancelar") } }
+        )
     }
 }
 
