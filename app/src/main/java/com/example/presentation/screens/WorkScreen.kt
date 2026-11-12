@@ -3,6 +3,7 @@ package com.example.presentation.screens
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -31,6 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -104,6 +109,7 @@ fun WorkScreen(
 ) {
     var tab by remember { mutableStateOf(WorkTab.AJUSTES) }
     var menuOpen by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().background(DarkBg)) {
         TopBar(
@@ -142,7 +148,16 @@ fun WorkScreen(
                 testTag = "work_import_video"
             )
 
-            Preview(originalFrame = originalFrame, convertedFrame = convertedFrame, isConverting = isConverting)
+            Preview(
+                originalFrame = originalFrame,
+                convertedFrame = convertedFrame,
+                isConverting = isConverting,
+                picking = picking,
+                onPickOriginal = { c ->
+                    picking = false
+                    onSettingsChange { it.copy(chromaKeyColor = c) }
+                }
+            )
 
             PlaybackBar(
                 isPlaying = isPlaying,
@@ -158,7 +173,12 @@ fun WorkScreen(
             TabRow(selected = tab, onSelect = { tab = it })
 
             when (tab) {
-                WorkTab.AJUSTES -> AdjustmentsPanel(settings = settings, onSettingsChange = onSettingsChange)
+                WorkTab.AJUSTES -> AdjustmentsPanel(
+                    settings = settings,
+                    onSettingsChange = onSettingsChange,
+                    picking = picking,
+                    onTogglePicking = { picking = !picking }
+                )
                 WorkTab.PALETA -> PalettePanel(settings = settings, onSettingsChange = onSettingsChange)
                 WorkTab.EXPORTAR -> ExportPanel(
                     hasFrames = frames.isNotEmpty(),
@@ -214,28 +234,77 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit, onCheckUpdates: 
 }
 
 @Composable
-private fun Preview(originalFrame: Bitmap?, convertedFrame: Bitmap?, isConverting: Boolean) {
+private fun Preview(
+    originalFrame: Bitmap?,
+    convertedFrame: Bitmap?,
+    isConverting: Boolean,
+    picking: Boolean,
+    onPickOriginal: (Color) -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        PreviewPanel(title = "ORIGINAL", bitmap = originalFrame, loading = false, modifier = Modifier.weight(1f))
-        PreviewPanel(title = "PIXEL ART", bitmap = convertedFrame, loading = isConverting, modifier = Modifier.weight(1f))
+        PreviewPanel(
+            title = "ORIGINAL",
+            bitmap = originalFrame,
+            loading = false,
+            picking = picking,
+            onPick = onPickOriginal,
+            modifier = Modifier.weight(1f)
+        )
+        PreviewPanel(
+            title = "PIXEL ART",
+            bitmap = convertedFrame,
+            loading = isConverting,
+            picking = false,
+            onPick = null,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
 @Composable
-private fun PreviewPanel(title: String, bitmap: Bitmap?, loading: Boolean, modifier: Modifier) {
+private fun PreviewPanel(
+    title: String,
+    bitmap: Bitmap?,
+    loading: Boolean,
+    picking: Boolean,
+    onPick: ((Color) -> Unit)?,
+    modifier: Modifier
+) {
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            text = if (picking) "$title (toque para escolher a cor)" else title,
+            color = if (picking) Gold else Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
         Spacer(modifier = Modifier.height(4.dp))
+        val tapModifier = if (picking && onPick != null && bitmap != null) {
+            Modifier.pointerInput(bitmap) {
+                detectTapGestures { offset ->
+                    val pickedColor = pixelAt(bitmap, offset, boxSize)
+                    if (pickedColor != null) onPick(pickedColor)
+                }
+            }
+        } else {
+            Modifier
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .onSizeChanged { boxSize = it }
+                .then(tapModifier)
                 .clip(RoundedCornerShape(4.dp))
                 .background(GreenFrame)
-                .border(2.dp, Color.White, RoundedCornerShape(4.dp)),
+                .border(
+                    width = if (picking) 3.dp else 2.dp,
+                    color = if (picking) Gold else Color.White,
+                    shape = RoundedCornerShape(4.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
             when {
@@ -250,6 +319,23 @@ private fun PreviewPanel(title: String, bitmap: Bitmap?, loading: Boolean, modif
             }
         }
     }
+}
+
+/**
+ * Converte o toque na caixa da prévia para a coordenada do bitmap (ContentScale.Fit, centralizado)
+ * e devolve a cor do pixel. Retorna null se o toque cair fora da imagem.
+ */
+private fun pixelAt(bitmap: Bitmap, offset: Offset, box: IntSize): Color? {
+    if (box.width == 0 || box.height == 0) return null
+    val bw = bitmap.width.toFloat()
+    val bh = bitmap.height.toFloat()
+    val scale = minOf(box.width / bw, box.height / bh)
+    val offX = (box.width - bw * scale) / 2f
+    val offY = (box.height - bh * scale) / 2f
+    val px = ((offset.x - offX) / scale).toInt()
+    val py = ((offset.y - offY) / scale).toInt()
+    if (px !in 0 until bitmap.width || py !in 0 until bitmap.height) return null
+    return Color(bitmap.getPixel(px, py))
 }
 
 @Composable
@@ -346,9 +432,38 @@ private fun TabRow(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
 }
 
 @Composable
-private fun AdjustmentsPanel(settings: PixelArtSettings, onSettingsChange: ((PixelArtSettings) -> PixelArtSettings) -> Unit) {
+private fun AdjustmentsPanel(
+    settings: PixelArtSettings,
+    onSettingsChange: ((PixelArtSettings) -> PixelArtSettings) -> Unit,
+    picking: Boolean,
+    onTogglePicking: () -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         XpGroupBox(title = "Remoção de fundo") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(settings.chromaKeyColor)
+                        .border(2.dp, Color.Black)
+                )
+                XpButton(
+                    text = if (picking) "Cancelar conta-gotas" else "Conta-gotas",
+                    onClick = onTogglePicking,
+                    isPrimaryGreen = picking,
+                    modifier = Modifier.weight(1f),
+                    testTag = "work_eyedropper"
+                )
+            }
+            Text(
+                text = if (picking) "Toque na imagem ORIGINAL no pixel do fundo." else "Escolha a cor do fundo tocando na imagem.",
+                color = Muted,
+                fontSize = 11.sp
+            )
             XpRadioButton(
                 selected = settings.chromaKeyEnabled,
                 onClick = { onSettingsChange { it.copy(chromaKeyEnabled = !it.chromaKeyEnabled) } },
