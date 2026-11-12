@@ -64,6 +64,8 @@ object SpriteXpStorage {
                 resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: error("MediaStore não criou o arquivo $name")
             }
+            // "wt" trunca o arquivo antes de gravar. Sem isso, um conteúdo menor que o anterior
+            // (ex.: presets.json encurtado) deixaria bytes antigos no fim e quebraria o arquivo.
             resolver.openOutputStream(uri, "wt")?.use { it.write(bytes) }
                 ?: error("Sem saída para $name")
             resolver.update(

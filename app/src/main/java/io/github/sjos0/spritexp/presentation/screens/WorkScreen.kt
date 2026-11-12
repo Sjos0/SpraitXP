@@ -1,5 +1,10 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.TextStyle
 import java.util.Locale
 import java.util.Date
 import java.text.SimpleDateFormat
@@ -78,13 +83,41 @@ import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
 import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
 
-private val DarkBg = Color(0xFF1A1A1E)
-private val PanelBg = Color(0xFF2A2A2E)
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
-private val Muted = Color(0xFFD0D0D0)
 /** Texto de apoio sobre superfícies claras (GroupBox): cinza escuro para contraste. */
 private val HintOnLight = Color(0xFF4A4A4A)
+
+/** Cores da tela de trabalho por tema. O escuro mantém o visual XP atual. */
+private data class WorkColors(
+    val background: Color,
+    val panel: Color,
+    val text: Color,
+    val muted: Color,
+    val toolIdle: Color
+)
+
+private val DarkWorkColors = WorkColors(
+    background = Color(0xFF1A1A1E),
+    panel = Color(0xFF2A2A2E),
+    text = Color.White,
+    muted = Color(0xFFD0D0D0),
+    toolIdle = Color(0xFF3A3A40)
+)
+
+private val LightWorkColors = WorkColors(
+    background = Color(0xFFF2F0E6),
+    panel = Color(0xFFE2DED0),
+    text = Color(0xFF1A1A1E),
+    muted = Color(0xFF4A4A4A),
+    toolIdle = Color(0xFFD6D2C4)
+)
+
+private val LocalWorkColors = staticCompositionLocalOf { DarkWorkColors }
+
+/** Paleta da tela de trabalho para o tema atual. */
+private val workColors: WorkColors
+    @Composable get() = LocalWorkColors.current
 
 private enum class WorkTab(val label: String, val icon: ImageVector) {
     AJUSTES("Ajustes", Icons.Filled.Tune),
@@ -115,7 +148,7 @@ fun WorkScreen(
     sourceFrameCount: Int,
     isImporting: Boolean,
     importProgress: Float,
-    onPickVideo: () -> Unit,
+    onPickMedia: () -> Unit,
     onTogglePlay: () -> Unit,
     onFpsChange: (Int) -> Unit,
     onIntervalChange: (Int, Int) -> Unit,
@@ -134,6 +167,7 @@ fun WorkScreen(
     onPickSheet: () -> Unit,
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
+    isDarkTheme: Boolean,
     presets: List<SettingsPreset>,
     onSavePreset: (String) -> Unit,
     onOverwritePreset: (String) -> Unit,
@@ -142,12 +176,13 @@ fun WorkScreen(
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    CompositionLocalProvider(LocalWorkColors provides if (isDarkTheme) DarkWorkColors else LightWorkColors) {
     var tab by remember { mutableStateOf(WorkTab.AJUSTES) }
     var menuOpen by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     var enlargeOpen by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = modifier.fillMaxSize().background(workColors.background)) {
         TopBar(
             menuOpen = menuOpen,
             onToggleMenu = { menuOpen = !menuOpen }
@@ -157,7 +192,7 @@ fun WorkScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(PanelBg)
+                    .background(workColors.panel)
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -174,15 +209,13 @@ fun WorkScreen(
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            XpButton(
-                text = if (isImporting) "Importando… ${(importProgress * 100).toInt()}%" else "Importar vídeo",
-                onClick = onPickVideo,
-                isPrimaryGreen = true,
-                enabled = !isImporting,
-                modifier = Modifier.fillMaxWidth(),
-                testTag = "work_import_video"
-            )
             if (isImporting) {
+                Text(
+                    text = "Importando… ${(importProgress * 100).toInt()}%",
+                    color = workColors.text,
+                    fontFamily = PixelifyFontFamily,
+                    fontSize = 12.sp
+                )
                 XpSegmentedProgressBar(progress = importProgress, modifier = Modifier.fillMaxWidth())
             }
 
@@ -195,7 +228,8 @@ fun WorkScreen(
                     picking = false
                     onSettingsChange { it.copy(chromaKeyColor = c) }
                 },
-                onEnlarge = { enlargeOpen = true }
+                onEnlarge = { enlargeOpen = true },
+                onImportMedia = onPickMedia
             )
 
             PlaybackBar(
@@ -270,6 +304,7 @@ fun WorkScreen(
             fps = fps,
             onDismiss = { enlargeOpen = false }
         )
+    }
     }
 }
 
@@ -397,6 +432,8 @@ private fun PresetsDialog(
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = Color(0xFFECE9D8),
+        titleContentColor = Color.Black,
+        textContentColor = Color.Black,
         title = { Text(text = "Presets", fontFamily = PixelifyFontFamily, color = Color(0xFF0A246A)) },
         text = {
             Column(
@@ -408,6 +445,19 @@ private fun PresetsDialog(
                     onValueChange = { newName = it.take(40) },
                     singleLine = true,
                     label = { Text(text = "Nome do novo preset", fontFamily = PixelifyFontFamily) },
+                    // Cores explícitas: o dialog é bege e o tema da Activity é escuro (texto claro = invisível).
+                    textStyle = TextStyle(color = Color.Black, fontFamily = PixelifyFontFamily, fontSize = 14.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color(0xFF0A246A),
+                        unfocusedBorderColor = Color(0xFF808080),
+                        focusedLabelColor = Color(0xFF0A246A),
+                        unfocusedLabelColor = Color(0xFF4A4A4A),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 XpButton(
@@ -436,22 +486,23 @@ private fun PresetsDialog(
                             fontFamily = PixelifyFontFamily,
                             fontSize = 11.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Um botão por linha: o nome completo cabe, sem "Car..." nem "Sobr...".
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             XpButton(
                                 text = "Carregar",
                                 onClick = { onApply(preset.id); onClose() },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                             XpButton(
                                 text = "Sobrescrever",
                                 onClick = { pending = PresetAction.OVERWRITE to preset },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                             XpButton(
                                 text = "Excluir",
                                 onClick = { pending = PresetAction.DELETE to preset },
                                 isDangerOrange = true,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
@@ -466,6 +517,8 @@ private fun PresetsDialog(
         AlertDialog(
             onDismissRequest = { pending = null },
             containerColor = Color(0xFFECE9D8),
+            titleContentColor = Color.Black,
+            textContentColor = Color.Black,
             title = { Text("Tem certeza?") },
             text = {
                 Text(
@@ -495,7 +548,7 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
     ) {
         Text(fontFamily = PixelifyFontFamily, 
             text = "SpriteXP",
-            color = Color.White,
+            color = workColors.text,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             modifier = Modifier.weight(1f)
@@ -516,7 +569,8 @@ private fun Preview(
     isConverting: Boolean,
     picking: Boolean,
     onPickOriginal: (Color) -> Unit,
-    onEnlarge: () -> Unit
+    onEnlarge: () -> Unit,
+    onImportMedia: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -528,6 +582,7 @@ private fun Preview(
             loading = false,
             picking = picking,
             onPick = onPickOriginal,
+            onImportClick = onImportMedia,
             modifier = Modifier.weight(1f)
         )
         Column(
@@ -560,6 +615,7 @@ private fun PreviewPanel(
     loading: Boolean,
     picking: Boolean,
     onPick: ((Color) -> Unit)?,
+    onImportClick: (() -> Unit)? = null,
     modifier: Modifier
 ) {
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
@@ -581,12 +637,18 @@ private fun PreviewPanel(
         } else {
             Modifier
         }
+        val importModifier = if (!picking && onImportClick != null) {
+            Modifier.clickable(enabled = !loading) { onImportClick() }
+        } else {
+            Modifier
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp)
                 .onSizeChanged { boxSize = it }
                 .then(tapModifier)
+                .then(importModifier)
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color.Black)
                 .border(
@@ -604,7 +666,13 @@ private fun PreviewPanel(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                else -> Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
+                else -> Text(
+                    fontFamily = PixelifyFontFamily,
+                    text = if (onImportClick != null) "Toque para importar\nimagem ou vídeo" else "Aguardando a original",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -648,7 +716,7 @@ private fun PlaybackBar(
         )
         Text(fontFamily = PixelifyFontFamily, 
             text = "Quadro ${currentIndex + 1}/$frameCount",
-            color = Color.White,
+            color = workColors.text,
             fontSize = 13.sp
         )
     }
@@ -699,8 +767,8 @@ private fun AnimationPanel(
 private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit) {
     if (frames.isEmpty()) {
         Text(fontFamily = PixelifyFontFamily, 
-            text = "Importe um vídeo para ver os quadros.",
-            color = Muted,
+            text = "Importe uma imagem ou vídeo para ver os quadros.",
+            color = workColors.muted,
             fontSize = 12.sp
         )
         return
@@ -736,7 +804,7 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(PanelBg)
+            .background(workColors.panel)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -746,7 +814,7 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (isSelected) GreenFrame else Color(0xFF3A3A40))
+                    .background(if (isSelected) GreenFrame else workColors.toolIdle)
                     .border(1.dp, if (isSelected) Gold else Color.Black, RoundedCornerShape(4.dp))
                     .clickable { onSelect(tool) }
                     .padding(vertical = 6.dp),
@@ -756,12 +824,12 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 Icon(
                     imageVector = tool.icon,
                     contentDescription = tool.label,
-                    tint = Color.White,
+                    tint = if (isSelected) Color.White else workColors.text,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
                     text = tool.label,
-                    color = Color.White,
+                    color = if (isSelected) Color.White else workColors.text,
                     fontFamily = PixelifyFontFamily,
                     fontSize = 10.sp,
                     maxLines = 1,
@@ -964,7 +1032,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
             }
             val swatches = settings.palettePreset.colors
             if (swatches.isNotEmpty()) {
-                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.Black, fontSize = 12.sp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1025,7 +1093,7 @@ private fun ExportPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(12.dp)
-                        .background(PanelBg)
+                        .background(workColors.panel)
                         .border(1.dp, Color.Black)
                 ) {
                     Box(
@@ -1037,7 +1105,7 @@ private fun ExportPanel(
                 }
             }
             if (!hasFrames) {
-                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe uma imagem ou vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
         XpCollapsibleGroupBox(title = "Automator") {
@@ -1081,7 +1149,7 @@ private fun AnalyzerPanel(
                         contentScale = ContentScale.Fit
                     )
                 }
-                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.Black, fontSize = 12.sp)
                 XpSlider(
                     label = "Início",
                     value = start.toFloat(),

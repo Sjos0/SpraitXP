@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.TextButton
@@ -180,6 +182,8 @@ private fun NumericEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = XpWindowBg,
+        titleContentColor = Color.Black,
+        textContentColor = Color.Black,
         title = { Text(text = "Editar $label", fontFamily = PixelifyFontFamily, color = LunaTitleStart) },
         text = {
             OutlinedTextField(
@@ -298,7 +302,9 @@ fun XpCollapsibleGroupBox(
             enter = expandVertically(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
             exit = shrinkVertically(animationSpec = tween(350)) + fadeOut(animationSpec = tween(350))
         ) {
-            Column { content() }
+            CompositionLocalProvider(LocalContentColor provides XpTextBlack) {
+                Column { content() }
+            }
         }
     }
 }
@@ -329,6 +335,6 @@ fun XpGroupBox(
             fontSize = 13.sp,
             modifier = Modifier.padding(bottom = 6.dp)
         )
-        content()
+        CompositionLocalProvider(LocalContentColor provides XpTextBlack) { content() }
     }
 }
