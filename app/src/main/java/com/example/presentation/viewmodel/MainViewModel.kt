@@ -187,7 +187,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             delay(150)
             _uiState.value = _uiState.value.copy(
-                currentScreen = "desktop",
+                currentScreen = "converter",
                 alertMessage = "Bem-vindo ao SpriteXP!"
             )
             requestPixelConversion()
