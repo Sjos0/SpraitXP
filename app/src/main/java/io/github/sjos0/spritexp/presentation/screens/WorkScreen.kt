@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.text.TextStyle
 import java.util.Locale
@@ -80,13 +82,41 @@ import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
 import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
 
-private val DarkBg = Color(0xFF1A1A1E)
-private val PanelBg = Color(0xFF2A2A2E)
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
-private val Muted = Color(0xFFD0D0D0)
 /** Texto de apoio sobre superfícies claras (GroupBox): cinza escuro para contraste. */
 private val HintOnLight = Color(0xFF4A4A4A)
+
+/** Cores da tela de trabalho por tema. O escuro mantém o visual XP atual. */
+private data class WorkColors(
+    val background: Color,
+    val panel: Color,
+    val text: Color,
+    val muted: Color,
+    val toolIdle: Color
+)
+
+private val DarkWorkColors = WorkColors(
+    background = Color(0xFF1A1A1E),
+    panel = Color(0xFF2A2A2E),
+    text = Color.White,
+    muted = Color(0xFFD0D0D0),
+    toolIdle = Color(0xFF3A3A40)
+)
+
+private val LightWorkColors = WorkColors(
+    background = Color(0xFFF2F0E6),
+    panel = Color(0xFFE2DED0),
+    text = Color(0xFF1A1A1E),
+    muted = Color(0xFF4A4A4A),
+    toolIdle = Color(0xFFD6D2C4)
+)
+
+private val LocalWorkColors = staticCompositionLocalOf { DarkWorkColors }
+
+/** Paleta da tela de trabalho para o tema atual. */
+private val workColors: WorkColors
+    @Composable get() = LocalWorkColors.current
 
 private enum class WorkTab(val label: String, val icon: ImageVector) {
     AJUSTES("Ajustes", Icons.Filled.Tune),
@@ -136,6 +166,7 @@ fun WorkScreen(
     onPickSheet: () -> Unit,
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
+    isDarkTheme: Boolean,
     presets: List<SettingsPreset>,
     onSavePreset: (String) -> Unit,
     onOverwritePreset: (String) -> Unit,
@@ -144,12 +175,13 @@ fun WorkScreen(
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    CompositionLocalProvider(LocalWorkColors provides if (isDarkTheme) DarkWorkColors else LightWorkColors) {
     var tab by remember { mutableStateOf(WorkTab.AJUSTES) }
     var menuOpen by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     var enlargeOpen by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize().background(DarkBg)) {
+    Column(modifier = modifier.fillMaxSize().background(workColors.background)) {
         TopBar(
             menuOpen = menuOpen,
             onToggleMenu = { menuOpen = !menuOpen }
@@ -159,7 +191,7 @@ fun WorkScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(PanelBg)
+                    .background(workColors.panel)
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -272,6 +304,7 @@ fun WorkScreen(
             fps = fps,
             onDismiss = { enlargeOpen = false }
         )
+    }
     }
 }
 
@@ -515,7 +548,7 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
     ) {
         Text(fontFamily = PixelifyFontFamily, 
             text = "SpriteXP",
-            color = Color.White,
+            color = workColors.text,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             modifier = Modifier.weight(1f)
@@ -668,7 +701,7 @@ private fun PlaybackBar(
         )
         Text(fontFamily = PixelifyFontFamily, 
             text = "Quadro ${currentIndex + 1}/$frameCount",
-            color = Color.White,
+            color = workColors.text,
             fontSize = 13.sp
         )
     }
@@ -720,7 +753,7 @@ private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit
     if (frames.isEmpty()) {
         Text(fontFamily = PixelifyFontFamily, 
             text = "Importe um vídeo para ver os quadros.",
-            color = Muted,
+            color = workColors.muted,
             fontSize = 12.sp
         )
         return
@@ -756,7 +789,7 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(PanelBg)
+            .background(workColors.panel)
             .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -766,7 +799,7 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (isSelected) GreenFrame else Color(0xFF3A3A40))
+                    .background(if (isSelected) GreenFrame else workColors.toolIdle)
                     .border(1.dp, if (isSelected) Gold else Color.Black, RoundedCornerShape(4.dp))
                     .clickable { onSelect(tool) }
                     .padding(vertical = 6.dp),
@@ -776,12 +809,12 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 Icon(
                     imageVector = tool.icon,
                     contentDescription = tool.label,
-                    tint = Color.White,
+                    tint = if (isSelected) Color.White else workColors.text,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
                     text = tool.label,
-                    color = Color.White,
+                    color = if (isSelected) Color.White else workColors.text,
                     fontFamily = PixelifyFontFamily,
                     fontSize = 10.sp,
                     maxLines = 1,
@@ -984,7 +1017,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
             }
             val swatches = settings.palettePreset.colors
             if (swatches.isNotEmpty()) {
-                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.Black, fontSize = 12.sp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1045,7 +1078,7 @@ private fun ExportPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(12.dp)
-                        .background(PanelBg)
+                        .background(workColors.panel)
                         .border(1.dp, Color.Black)
                 ) {
                     Box(
@@ -1101,7 +1134,7 @@ private fun AnalyzerPanel(
                         contentScale = ContentScale.Fit
                     )
                 }
-                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.Black, fontSize = 12.sp)
                 XpSlider(
                     label = "Início",
                     value = start.toFloat(),

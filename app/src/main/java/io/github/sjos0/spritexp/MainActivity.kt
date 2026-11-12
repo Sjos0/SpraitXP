@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
                                         endFrame = state.videoEndFrame,
                                         isImporting = state.isImporting,
                                         importProgress = state.importProgress,
+                                        isDarkTheme = state.isDarkTheme,
                                         presets = presets,
                                         onSavePreset = { viewModel.savePreset(it) },
                                         onOverwritePreset = { viewModel.overwritePreset(it) },
