@@ -1,5 +1,14 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import io.github.sjos0.spritexp.domain.model.SettingsPreset
+import io.github.sjos0.spritexp.presentation.components.XpCollapsibleGroupBox
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -65,15 +74,15 @@ import io.github.sjos0.spritexp.domain.model.DitherMode
 import io.github.sjos0.spritexp.domain.model.PalettePreset
 import io.github.sjos0.spritexp.domain.model.PixelArtSettings
 import io.github.sjos0.spritexp.presentation.components.XpButton
-import io.github.sjos0.spritexp.presentation.components.XpGroupBox
 import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
+import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
 
 private val DarkBg = Color(0xFF1A1A1E)
 private val PanelBg = Color(0xFF2A2A2E)
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
-private val Muted = Color(0xFFBBBBBB)
+private val Muted = Color(0xFFD0D0D0)
 /** Texto de apoio sobre superfícies claras (GroupBox): cinza escuro para contraste. */
 private val HintOnLight = Color(0xFF4A4A4A)
 
@@ -105,6 +114,7 @@ fun WorkScreen(
     endFrame: Int,
     sourceFrameCount: Int,
     isImporting: Boolean,
+    importProgress: Float,
     onPickVideo: () -> Unit,
     onTogglePlay: () -> Unit,
     onFpsChange: (Int) -> Unit,
@@ -124,6 +134,11 @@ fun WorkScreen(
     onPickSheet: () -> Unit,
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
+    presets: List<SettingsPreset>,
+    onSavePreset: (String) -> Unit,
+    onOverwritePreset: (String) -> Unit,
+    onDeletePreset: (String) -> Unit,
+    onApplyPreset: (String) -> Unit,
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -160,13 +175,16 @@ fun WorkScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             XpButton(
-                text = if (isImporting) "Importando vídeo..." else "Importar vídeo",
+                text = if (isImporting) "Importando… ${(importProgress * 100).toInt()}%" else "Importar vídeo",
                 onClick = onPickVideo,
                 isPrimaryGreen = true,
                 enabled = !isImporting,
                 modifier = Modifier.fillMaxWidth(),
                 testTag = "work_import_video"
             )
+            if (isImporting) {
+                XpSegmentedProgressBar(progress = importProgress, modifier = Modifier.fillMaxWidth())
+            }
 
             Preview(
                 originalFrame = originalFrame,
@@ -202,12 +220,21 @@ fun WorkScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             when (tab) {
-                WorkTab.AJUSTES -> AdjustmentsPanel(
-                    settings = settings,
-                    onSettingsChange = onSettingsChange,
-                    picking = picking,
-                    onTogglePicking = { picking = !picking }
-                )
+                WorkTab.AJUSTES -> {
+                    AdjustmentsPanel(
+                        settings = settings,
+                        onSettingsChange = onSettingsChange,
+                        picking = picking,
+                        onTogglePicking = { picking = !picking }
+                    )
+                    PresetsSection(
+                        presets = presets,
+                        onSave = onSavePreset,
+                        onOverwrite = onOverwritePreset,
+                        onDelete = onDeletePreset,
+                        onApply = onApplyPreset
+                    )
+                }
                 WorkTab.ANIMACAO -> AnimationPanel(
                     sourceFrameCount = sourceFrameCount,
                     startFrame = startFrame,
@@ -302,7 +329,7 @@ private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit)
                     modifier = Modifier.width(140.dp),
                     testTag = "enlarge_play"
                 )
-                Text(text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
             }
         }
     }
@@ -324,6 +351,139 @@ private fun Modifier.checkerboard(): Modifier = this.drawBehind {
     }
 }
 
+/** Botão Presets: abre a janela de salvar, carregar, sobrescrever e excluir. */
+@Composable
+private fun PresetsSection(
+    presets: List<SettingsPreset>,
+    onSave: (String) -> Unit,
+    onOverwrite: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onApply: (String) -> Unit
+) {
+    var open by remember { mutableStateOf(false) }
+    XpButton(
+        text = "Presets…",
+        onClick = { open = true },
+        modifier = Modifier.fillMaxWidth(),
+        testTag = "work_presets"
+    )
+    if (open) {
+        PresetsDialog(
+            presets = presets,
+            onSave = onSave,
+            onOverwrite = onOverwrite,
+            onDelete = onDelete,
+            onApply = onApply,
+            onClose = { open = false }
+        )
+    }
+}
+
+private enum class PresetAction { OVERWRITE, DELETE }
+
+@Composable
+private fun PresetsDialog(
+    presets: List<SettingsPreset>,
+    onSave: (String) -> Unit,
+    onOverwrite: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onApply: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    var newName by remember { mutableStateOf("") }
+    var pending by remember { mutableStateOf<Pair<PresetAction, SettingsPreset>?>(null) }
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = Color(0xFFECE9D8),
+        title = { Text(text = "Presets", fontFamily = PixelifyFontFamily, color = Color(0xFF0A246A)) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it.take(40) },
+                    singleLine = true,
+                    label = { Text(text = "Nome do novo preset", fontFamily = PixelifyFontFamily) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                XpButton(
+                    text = "Salvar novo",
+                    onClick = { onSave(newName); newName = "" },
+                    enabled = newName.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (presets.isEmpty()) {
+                    Text(
+                        text = "Nenhum preset salvo ainda.",
+                        color = HintOnLight,
+                        fontFamily = PixelifyFontFamily,
+                        fontSize = 12.sp
+                    )
+                }
+                presets.forEach { preset ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF808080)).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = preset.name, color = Color.Black, fontFamily = PixelifyFontFamily, fontSize = 14.sp)
+                        Text(
+                            text = "Salvo em ${dateFormat.format(Date(preset.createdAt))} · ${preset.videoFps} fps",
+                            color = HintOnLight,
+                            fontFamily = PixelifyFontFamily,
+                            fontSize = 11.sp
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            XpButton(
+                                text = "Carregar",
+                                onClick = { onApply(preset.id); onClose() },
+                                modifier = Modifier.weight(1f)
+                            )
+                            XpButton(
+                                text = "Sobrescrever",
+                                onClick = { pending = PresetAction.OVERWRITE to preset },
+                                modifier = Modifier.weight(1f)
+                            )
+                            XpButton(
+                                text = "Excluir",
+                                onClick = { pending = PresetAction.DELETE to preset },
+                                isDangerOrange = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Fechar") } }
+    )
+
+    pending?.let { (action, preset) ->
+        val isDelete = action == PresetAction.DELETE
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            containerColor = Color(0xFFECE9D8),
+            title = { Text("Tem certeza?") },
+            text = {
+                Text(
+                    if (isDelete) "O preset \"${preset.name}\" será excluído."
+                    else "O preset \"${preset.name}\" será substituído pelos ajustes atuais."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (isDelete) onDelete(preset.id) else onOverwrite(preset.id)
+                    pending = null
+                }) { Text(if (isDelete) "Excluir" else "Sobrescrever") }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancelar") } }
+        )
+    }
+}
+
 @Composable
 private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
     Row(
@@ -333,7 +493,7 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "SpriteXP",
             color = Color.White,
             fontWeight = FontWeight.Bold,
@@ -404,7 +564,7 @@ private fun PreviewPanel(
 ) {
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = if (picking) "$title (toque para escolher a cor)" else title,
             color = if (picking) Gold else Color.White,
             fontWeight = FontWeight.Bold,
@@ -437,14 +597,14 @@ private fun PreviewPanel(
             contentAlignment = Alignment.Center
         ) {
             when {
-                loading -> Text(text = "Convertendo...", color = Color.White, fontSize = 12.sp)
+                loading -> Text(fontFamily = PixelifyFontFamily, text = "Convertendo...", color = Color.White, fontSize = 12.sp)
                 bitmap != null -> Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                else -> Text(text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
+                else -> Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
             }
         }
     }
@@ -486,7 +646,7 @@ private fun PlaybackBar(
             modifier = Modifier.width(120.dp),
             testTag = "work_play"
         )
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "Quadro ${currentIndex + 1}/$frameCount",
             color = Color.White,
             fontSize = 13.sp
@@ -505,7 +665,7 @@ private fun AnimationPanel(
     onFpsChange: (Int) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Animação") {
+        XpCollapsibleGroupBox(title = "Animação") {
             if (sourceFrameCount > 1) {
                 XpSlider(
                     label = "Início",
@@ -522,7 +682,7 @@ private fun AnimationPanel(
                     displayFormatter = { "${it.toInt()}" }
                 )
             } else {
-                Text(text = "Importe um vídeo para escolher o intervalo.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo para escolher o intervalo.", color = HintOnLight, fontSize = 12.sp)
             }
             XpSlider(
                 label = "FPS",
@@ -538,7 +698,7 @@ private fun AnimationPanel(
 @Composable
 private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit) {
     if (frames.isEmpty()) {
-        Text(
+        Text(fontFamily = PixelifyFontFamily, 
             text = "Importe um vídeo para ver os quadros.",
             color = Muted,
             fontSize = 12.sp
@@ -621,7 +781,7 @@ private fun AdjustmentsPanel(
     onTogglePicking: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Remoção de fundo") {
+        XpCollapsibleGroupBox(title = "Remoção de fundo") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -641,7 +801,7 @@ private fun AdjustmentsPanel(
                     testTag = "work_eyedropper"
                 )
             }
-            Text(
+            Text(fontFamily = PixelifyFontFamily, 
                 text = if (picking) "Toque na imagem ORIGINAL no pixel do fundo." else "Escolha a cor do fundo tocando na imagem.",
                 color = HintOnLight,
                 fontSize = 11.sp
@@ -703,7 +863,7 @@ private fun AdjustmentsPanel(
             )
         }
 
-        XpGroupBox(title = "Aprimoramento") {
+        XpCollapsibleGroupBox(title = "Aprimoramento") {
             XpSlider(
                 label = "Realce de bordas",
                 value = settings.edgeEnhance,
@@ -727,7 +887,7 @@ private fun AdjustmentsPanel(
             )
         }
 
-        XpGroupBox(title = "Resolução e escala") {
+        XpCollapsibleGroupBox(title = "Resolução e escala") {
             XpSlider(
                 label = "Lado (px, 1:1)",
                 value = settings.targetResolution.toFloat(),
@@ -747,7 +907,7 @@ private fun AdjustmentsPanel(
                 suffix = "x",
                 onPick = { s -> onSettingsChange { it.copy(displayScale = s) } }
             )
-            Text(
+            Text(fontFamily = PixelifyFontFamily, 
                 text = "Saída: ${settings.targetResolution * settings.displayScale} px",
                 color = HintOnLight,
                 fontSize = 12.sp
@@ -779,12 +939,13 @@ private fun ChipRow(options: List<Int>, selected: Int, suffix: String, onPick: (
 private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelArtSettings) -> PixelArtSettings) -> Unit) {
     val isAuto = settings.palettePreset == PalettePreset.AUTO_EXTRACT
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Paleta de cores") {
+        XpCollapsibleGroupBox(title = "Paleta de cores") {
             XpRadioButton(
                 selected = isAuto,
                 onClick = { onSettingsChange { it.copy(palettePreset = PalettePreset.AUTO_EXTRACT) } },
                 label = "Extração automática"
             )
+            // Auto só acrescenta o slider de máximo de cores; as outras paletas continuam listadas.
             if (isAuto) {
                 XpSlider(
                     label = "Máx. de cores",
@@ -793,18 +954,17 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
                     valueRange = 2f..64f,
                     displayFormatter = { "${it.toInt()}" }
                 )
-            } else {
-                PalettePreset.values().filter { it != PalettePreset.AUTO_EXTRACT }.forEach { p ->
-                    XpRadioButton(
-                        selected = settings.palettePreset == p,
-                        onClick = { onSettingsChange { it.copy(palettePreset = p) } },
-                        label = p.displayName
-                    )
-                }
+            }
+            PalettePreset.values().filter { it != PalettePreset.AUTO_EXTRACT }.forEach { p ->
+                XpRadioButton(
+                    selected = settings.palettePreset == p,
+                    onClick = { onSettingsChange { it.copy(palettePreset = p) } },
+                    label = p.displayName
+                )
             }
             val swatches = settings.palettePreset.colors
             if (swatches.isNotEmpty()) {
-                Text(text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Paleta ativa (${swatches.size})", color = Color.White, fontSize = 12.sp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -823,7 +983,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
             }
         }
 
-        XpGroupBox(title = "Dithering") {
+        XpCollapsibleGroupBox(title = "Dithering") {
             DitherMode.values().forEach { m ->
                 XpRadioButton(
                     selected = settings.ditherMode == m,
@@ -844,7 +1004,7 @@ private fun ExportPanel(
     onExportZip: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Exportar quadros") {
+        XpCollapsibleGroupBox(title = "Exportar quadros") {
             XpButton(
                 text = "Baixar Sprite Sheet (PNG)",
                 onClick = onExportSheet,
@@ -877,11 +1037,11 @@ private fun ExportPanel(
                 }
             }
             if (!hasFrames) {
-                Text(text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
-        XpGroupBox(title = "Automator") {
-            Text(text = "Em breve", color = HintOnLight, fontSize = 12.sp)
+        XpCollapsibleGroupBox(title = "Automator") {
+            Text(fontFamily = PixelifyFontFamily, text = "Em breve", color = HintOnLight, fontSize = 12.sp)
         }
     }
 }
@@ -898,7 +1058,7 @@ private fun AnalyzerPanel(
 ) {
     val total = (columns * rows).coerceAtLeast(1)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Analisador de sprite sheet") {
+        XpCollapsibleGroupBox(title = "Analisador de sprite sheet") {
             XpButton(
                 text = "Abrir sprite sheet",
                 onClick = onPickSheet,
@@ -921,7 +1081,7 @@ private fun AnalyzerPanel(
                         contentScale = ContentScale.Fit
                     )
                 }
-                Text(text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Grade: ${columns}x${rows} ($total quadros)", color = Color.White, fontSize = 12.sp)
                 XpSlider(
                     label = "Início",
                     value = start.toFloat(),
@@ -937,7 +1097,7 @@ private fun AnalyzerPanel(
                     displayFormatter = { "${it.toInt()}" }
                 )
             } else {
-                Text(text = "Abra uma sprite sheet 1:1 para analisar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Abra uma sprite sheet 1:1 para analisar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
     }

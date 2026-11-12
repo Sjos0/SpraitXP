@@ -1,5 +1,18 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -103,6 +116,7 @@ fun XpSlider(
     modifier: Modifier = Modifier,
     displayFormatter: (Float) -> String = { "%.0f".format(it) }
 ) {
+    var editing by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -121,7 +135,8 @@ fun XpSlider(
                 color = LunaTitleStart,
                 fontFamily = VT323FontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
+                fontSize = 20.sp,
+                modifier = Modifier.clickable { editing = true }.padding(start = 8.dp)
             )
         }
         Slider(
@@ -135,6 +150,62 @@ fun XpSlider(
             )
         )
     }
+    if (editing) {
+        NumericEditDialog(
+            label = label,
+            current = value,
+            valueRange = valueRange,
+            onConfirm = { onValueChange(it); editing = false },
+            onDismiss = { editing = false }
+        )
+    }
+}
+
+/**
+ * Digitar o valor exato. Aceita só número; fora do intervalo é ajustado para o limite mais próximo.
+ */
+@Composable
+private fun NumericEditDialog(
+    label: String,
+    current: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onConfirm: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val integerRange = valueRange.start % 1f == 0f && valueRange.endInclusive % 1f == 0f
+    fun fmt(v: Float): String = if (integerRange) v.toInt().toString() else "%.2f".format(v)
+    var text by remember { mutableStateOf(fmt(current)) }
+    val parsed = text.replace(',', '.').toFloatOrNull()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = XpWindowBg,
+        title = { Text(text = "Editar $label", fontFamily = PixelifyFontFamily, color = LunaTitleStart) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { raw -> text = raw.filter { it.isDigit() || it == '.' || it == ',' || it == '-' }.take(8) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                isError = parsed == null,
+                supportingText = {
+                    Text(
+                        text = if (parsed == null) "Digite um número."
+                        else "Entre ${fmt(valueRange.start)} e ${fmt(valueRange.endInclusive)}.",
+                        fontSize = 11.sp
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = parsed != null,
+                onClick = { parsed?.let { onConfirm(it.coerceIn(valueRange)) } }
+            ) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }
 
 /**
@@ -177,6 +248,58 @@ fun XpRadioButton(
             fontFamily = PixelifyFontFamily,
             fontSize = 14.sp
         )
+    }
+}
+
+/**
+ * Group Box que abre e fecha ao tocar no título. Começa fechado por padrão.
+ */
+@Composable
+fun XpCollapsibleGroupBox(
+    title: String,
+    modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFD4D0C8), RoundedCornerShape(4.dp))
+            .padding(1.dp)
+            .border(1.dp, Color(0xFFFFFFFF), RoundedCornerShape(3.dp))
+            .background(XpWindowBg)
+            .padding(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(bottom = if (expanded) 6.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = LunaTitleStart,
+                fontFamily = PixelifyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (expanded) "[-]" else "[+]",
+                color = LunaTitleStart,
+                fontFamily = VT323FontFamily,
+                fontSize = 18.sp
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+            exit = shrinkVertically(animationSpec = tween(350)) + fadeOut(animationSpec = tween(350))
+        ) {
+            Column { content() }
+        }
     }
 }
 

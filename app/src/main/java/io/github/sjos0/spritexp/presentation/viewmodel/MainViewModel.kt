@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.viewmodel
 
+import io.github.sjos0.spritexp.domain.model.SettingsPreset
+import io.github.sjos0.spritexp.data.repository.PresetRepository
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
@@ -12,6 +14,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.sjos0.spritexp.BuildConfig
 import io.github.sjos0.spritexp.data.pipeline.MediaProcessingPipeline
+import io.github.sjos0.spritexp.data.storage.SpriteXpStorage
 import io.github.sjos0.spritexp.data.update.AppUpdater
 import io.github.sjos0.spritexp.data.update.InstallEvent
 import io.github.sjos0.spritexp.data.update.InstallEvents
@@ -30,7 +33,9 @@ import io.github.sjos0.spritexp.domain.usecase.ImageRules
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +64,7 @@ data class MainUiState(
     val sourceKind: SourceKind = SourceKind.DEMO,
     val sourceName: String = "",
     val isImporting: Boolean = false,
+    val importProgress: Float = 0f,
 
     // Conversor Imagem
     val originalBitmap: Bitmap? = null,
@@ -101,6 +107,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mediaPipeline = MediaProcessingPipeline(application)
     val projectRepository: ProjectRepository = JsonProjectRepository(application)
 
+    private val presetRepository = PresetRepository(application)
+    private val _presets = MutableStateFlow<List<SettingsPreset>>(emptyList())
+
+    /** Presets salvos em Download/SpriteXP/presets.json. */
+    val presets: StateFlow<List<SettingsPreset>> = _presets.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _presets.value = withContext(Dispatchers.IO) { presetRepository.load() }
+        }
+    }
+
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
@@ -124,6 +142,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Intervalo da origem (1 based, inclusivo) que os quadros de [rawVideoFrames] representam. */
     private var rawRangeStart: Int = 1
     private var rawRangeEnd: Int = 0
+
+    /** Verdadeiro enquanto uma extração de quadros está em andamento. */
+    private var extractInFlight: Boolean = false
     private var videoUri: String? = null
 
     init {
@@ -208,31 +229,89 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val version = ++conversionVersion
         conversionJob?.cancel()
         conversionJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isConverting = true)
+            _uiState.update { it.copy(isConverting = true) }
+            try {
+                val palette = resolvePalette(frames.firstOrNull() ?: original, settings)
+                val convertedFrames = if (snapshot.sourceKind == SourceKind.VIDEO && frames.isNotEmpty()) {
+                    frames.map { convertOne(it, settings, palette) }
+                } else {
+                    emptyList()
+                }
+                val converted = original?.let { convertOne(it, settings, palette) }
+                val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
 
-            val palette = resolvePalette(frames.firstOrNull() ?: original, settings)
-            val convertedFrames = if (snapshot.sourceKind == SourceKind.VIDEO && frames.isNotEmpty()) {
-                frames.map { convertOne(it, settings, palette) }
-            } else {
-                emptyList()
+                // Ignora resultado de um pedido que já foi substituído.
+                if (version == conversionVersion) {
+                    _uiState.update { state ->
+                        state.copy(
+                            convertedBitmap = converted ?: state.convertedBitmap,
+                            videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else state.videoFrames,
+                            analyzerSheetBitmap = videoSheet?.bitmap ?: state.analyzerSheetBitmap,
+                            analyzerColumns = videoSheet?.columns ?: state.analyzerColumns,
+                            analyzerRows = videoSheet?.rows ?: state.analyzerRows,
+                            analyzerSelectedRangeStart = if (videoSheet != null) 1 else state.analyzerSelectedRangeStart,
+                            analyzerSelectedRangeEnd = if (videoSheet != null) convertedFrames.size else state.analyzerSelectedRangeEnd
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.e(tag, "Falha na conversão", e)
+                if (version == conversionVersion) {
+                    showAlert("Não foi possível converter. Ajuste as configurações e tente de novo.")
+                }
+            } finally {
+                // A prévia nunca fica presa em "Convertendo..." (sucesso, erro ou cancelamento).
+                if (version == conversionVersion) _uiState.update { it.copy(isConverting = false) }
             }
-            val converted = original?.let { convertOne(it, settings, palette) }
+        }
+    }
 
-            val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
+    /** Salva os ajustes atuais (Ajustes, Paleta e FPS) como um preset novo. */
+    fun savePreset(rawName: String) {
+        val name = rawName.trim().take(40)
+        if (name.isEmpty()) {
+            showAlert("Dê um nome ao preset.")
+            return
+        }
+        val s = _uiState.value
+        val preset = SettingsPreset(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name,
+            createdAt = System.currentTimeMillis(),
+            settings = s.pixelSettings,
+            videoFps = s.videoFps
+        )
+        persistPresets(_presets.value + preset, "Preset \"$name\" salvo.")
+    }
 
-            // Ignora resultado de um pedido que já foi substituído.
-            if (version == conversionVersion) {
-                _uiState.value = _uiState.value.copy(
-                    convertedBitmap = converted ?: _uiState.value.convertedBitmap,
-                    videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else _uiState.value.videoFrames,
-                    analyzerSheetBitmap = videoSheet?.bitmap ?: _uiState.value.analyzerSheetBitmap,
-                    analyzerColumns = videoSheet?.columns ?: _uiState.value.analyzerColumns,
-                    analyzerRows = videoSheet?.rows ?: _uiState.value.analyzerRows,
-                    analyzerSelectedRangeStart = if (videoSheet != null) 1 else _uiState.value.analyzerSelectedRangeStart,
-                    analyzerSelectedRangeEnd = if (videoSheet != null) convertedFrames.size else _uiState.value.analyzerSelectedRangeEnd,
-                    isConverting = false
-                )
-            }
+    /** Troca os ajustes de um preset pelos atuais. */
+    fun overwritePreset(id: String) {
+        val s = _uiState.value
+        val updated = _presets.value.map {
+            if (it.id == id) it.copy(settings = s.pixelSettings, videoFps = s.videoFps, createdAt = System.currentTimeMillis()) else it
+        }
+        persistPresets(updated, "Preset atualizado com os ajustes atuais.")
+    }
+
+    fun deletePreset(id: String) {
+        persistPresets(_presets.value.filterNot { it.id == id }, "Preset excluído.")
+    }
+
+    /** Aplica settings e FPS do preset e refaz a conversão. Não reimporta o vídeo. */
+    fun applyPreset(id: String) {
+        val preset = _presets.value.firstOrNull { it.id == id } ?: return
+        _uiState.update { it.copy(pixelSettings = preset.settings, videoFps = preset.videoFps.coerceIn(1, 60)) }
+        scheduleDebouncedConversion()
+        showAlert("Preset \"${preset.name}\" aplicado.")
+    }
+
+    private fun persistPresets(list: List<SettingsPreset>, okMessage: String) {
+        _presets.value = list
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) { presetRepository.save(list) }
+            showAlert(if (saved) okMessage else "Não foi possível salvar os presets em ${SpriteXpStorage.DISPLAY_DIR}.")
         }
     }
 
@@ -430,22 +509,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun extractVideoFrames() {
         val uri = videoUri ?: return
         val s = _uiState.value
-        _uiState.value = s.copy(isImporting = true)
-        val frames = withContext(Dispatchers.IO) {
-            mediaPipeline.extractFrames(
-                videoUriString = uri,
-                firstFrame = s.videoStartFrame - 1,
-                lastFrame = s.videoEndFrame - 1,
-                sourceFps = s.videoSourceFps,
-                maxFrames = MAX_VIDEO_FRAMES,
-                targetSide = 256
-            )
+        extractInFlight = true
+        _uiState.update { it.copy(isImporting = true, importProgress = 0f) }
+        var extracted = false
+        try {
+            val frames = withContext(Dispatchers.IO) {
+                mediaPipeline.extractFrames(
+                    videoUriString = uri,
+                    firstFrame = s.videoStartFrame - 1,
+                    lastFrame = s.videoEndFrame - 1,
+                    sourceFps = s.videoSourceFps,
+                    maxFrames = MAX_VIDEO_FRAMES,
+                    targetSide = 256,
+                    onProgress = { p -> _uiState.update { it.copy(importProgress = p) } }
+                )
+            }
+            rawVideoFrames = frames
+            rawRangeStart = s.videoStartFrame
+            rawRangeEnd = s.videoStartFrame + frames.size - 1
+            _uiState.update { it.copy(currentFrameIndex = 0) }
+            extracted = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.e(tag, "Falha ao extrair quadros", e)
+            showAlert("Não foi possível extrair os quadros deste vídeo. Tente um intervalo menor.")
+        } finally {
+            // Sempre limpa o progresso, mesmo com erro ou cancelamento: o botão nunca fica preso.
+            extractInFlight = false
+            _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
         }
-        rawVideoFrames = frames
-        rawRangeStart = s.videoStartFrame
-        rawRangeEnd = s.videoStartFrame + frames.size - 1
-        _uiState.value = _uiState.value.copy(isImporting = false, currentFrameIndex = 0)
-        requestPixelConversion()
+        if (extracted) requestPixelConversion()
     }
 
     fun selectVideoFrame(index: Int) {
@@ -523,23 +617,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isExporting = true, exportProgress = 0.1f)
+            _uiState.update { it.copy(isExporting = true, exportProgress = 0.1f) }
             val file = try {
                 writeExport(snapshot, frames)
             } catch (e: Exception) {
                 Log.e(tag, "Falha na exportação", e)
                 null
             }
-            _uiState.value = _uiState.value.copy(
-                exportProgress = 1f,
-                isExporting = false,
-                exportedFilePath = file?.absolutePath,
-                alertMessage = if (file != null) {
-                    "Exportação concluída! Arquivo gerado: ${file.name}"
-                } else {
-                    "Falha ao exportar. Tente novamente."
-                }
-            )
+            // Copia o resultado para Download/SpriteXP: a pasta de cache pode ser apagada pelo sistema.
+            val savedName = file?.let { f ->
+                withContext(Dispatchers.IO) { SpriteXpStorage.publish(getApplication(), f) }
+            }
+            _uiState.update {
+                it.copy(
+                    exportProgress = 1f,
+                    isExporting = false,
+                    exportedFilePath = file?.absolutePath,
+                    alertMessage = when {
+                        file == null -> "Falha ao exportar. Tente novamente."
+                        savedName == null ->
+                            "Exportado, mas não foi possível salvar em ${SpriteXpStorage.DISPLAY_DIR}. Verifique a permissão de armazenamento."
+                        else -> "Exportação salva em ${SpriteXpStorage.DISPLAY_DIR}/$savedName"
+                    }
+                )
+            }
             if (file != null) saveProject(snapshot, frames.size, file.absolutePath)
         }
     }
@@ -675,8 +776,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Ao voltar do segundo plano: limpa flags órfãs e refaz só a conversão se faltar prévia.
+     * Nunca reimporta o vídeo.
+     */
+    private fun reconcileAfterBackground() {
+        val s = _uiState.value
+        if (s.isImporting && !extractInFlight) {
+            _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
+        }
+        if (s.isConverting && conversionJob?.isActive != true) {
+            _uiState.update { it.copy(isConverting = false) }
+            requestPixelConversion()
+        }
+    }
+
     /** Ao voltar do Ajustes com a permissão liberada, continua a atualização sem novo toque. */
     fun onAppResumed() {
+        reconcileAfterBackground()
         val state = _updateState.value
         if (state.stage == UpdateStage.NEED_PERMISSION && state.info != null && updater.canInstallPackages()) {
             runUpdate(state.info)
