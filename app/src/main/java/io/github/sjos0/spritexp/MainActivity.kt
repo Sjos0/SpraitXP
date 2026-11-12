@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                                         isPlaying = state.isPlayingPreview,
                                         fps = state.videoFps,
                                         startFrame = state.videoStartFrame,
+                                        sourceFrameCount = state.videoTotalFrames,
                                         endFrame = state.videoEndFrame,
                                         isImporting = state.isImporting,
                                         onPickVideo = { videoPicker.launch("video/*") },
@@ -133,7 +134,7 @@ class MainActivity : ComponentActivity() {
                                         onPickSheet = { sheetPicker.launch("image/*") },
                                         onNavigateProjects = { viewModel.navigateTo("projects") },
                                         onNavigateSettings = { viewModel.navigateTo("settings") },
-                                        onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
+                                        
                                         onShowAbout = {
                                             viewModel.showAlert(
                                                 "SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa\nAndroid 8.0+"

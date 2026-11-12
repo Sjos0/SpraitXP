@@ -28,10 +28,33 @@ private val XpTrack = Color(0xFFD4D0C8)
 fun UpdateDialogHost(viewModel: MainViewModel) {
     val state by viewModel.updateState.collectAsState()
     val info = state.info
+    val uiState by viewModel.uiState.collectAsState()
+
+    // Feedback do app (ex.: "já está na versão mais recente"); antes só a tela antiga o mostrava.
+    uiState.alertMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissAlert() },
+            containerColor = XpBeige,
+            title = { Text("SpriteXP") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { viewModel.dismissAlert() }) { Text("OK") } }
+        )
+    }
 
     val context = LocalContext.current
 
     when (state.stage) {
+        UpdateStage.AVAILABLE -> if (info != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissUpdate() },
+                containerColor = XpBeige,
+                title = { Text("Nova versão disponível") },
+                text = { Text("A versão ${info.tag} está disponível. Deseja atualizar agora?") },
+                confirmButton = { TextButton(onClick = { viewModel.startUpdate() }) { Text("Atualizar") } },
+                dismissButton = { TextButton(onClick = { viewModel.dismissUpdate() }) { Text("Depois") } }
+            )
+        }
+
         UpdateStage.NEED_PERMISSION -> AlertDialog(
             onDismissRequest = { viewModel.dismissUpdate() },
             containerColor = XpBeige,

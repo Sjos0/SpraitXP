@@ -83,6 +83,7 @@ fun WorkScreen(
     fps: Int,
     startFrame: Int,
     endFrame: Int,
+    sourceFrameCount: Int,
     isImporting: Boolean,
     onPickVideo: () -> Unit,
     onTogglePlay: () -> Unit,
@@ -103,7 +104,6 @@ fun WorkScreen(
     onPickSheet: () -> Unit,
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
-    onCheckUpdates: () -> Unit,
     onShowAbout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -114,8 +114,7 @@ fun WorkScreen(
     Column(modifier = modifier.fillMaxSize().background(DarkBg)) {
         TopBar(
             menuOpen = menuOpen,
-            onToggleMenu = { menuOpen = !menuOpen },
-            onCheckUpdates = onCheckUpdates
+            onToggleMenu = { menuOpen = !menuOpen }
         )
 
         if (menuOpen) {
@@ -164,8 +163,12 @@ fun WorkScreen(
                 currentIndex = currentFrameIndex,
                 frameCount = frameCount,
                 fps = fps,
+                sourceFrameCount = sourceFrameCount,
+                startFrame = startFrame,
+                endFrame = endFrame,
                 onTogglePlay = onTogglePlay,
-                onFpsChange = onFpsChange
+                onFpsChange = onFpsChange,
+                onIntervalChange = onIntervalChange
             )
 
             Timeline(frames = frames, current = currentFrameIndex, onSelect = onSelectFrame)
@@ -202,7 +205,7 @@ fun WorkScreen(
 }
 
 @Composable
-private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit, onCheckUpdates: () -> Unit) {
+private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -217,13 +220,6 @@ private fun TopBar(menuOpen: Boolean, onToggleMenu: () -> Unit, onCheckUpdates: 
             fontSize = 18.sp,
             modifier = Modifier.weight(1f)
         )
-        XpButton(
-            text = "⟳ Atualizar",
-            onClick = onCheckUpdates,
-            modifier = Modifier.width(120.dp),
-            testTag = "work_update_button"
-        )
-        Spacer(modifier = Modifier.width(8.dp))
         XpButton(
             text = if (menuOpen) "✕" else "☰",
             onClick = onToggleMenu,
@@ -299,7 +295,7 @@ private fun PreviewPanel(
                 .onSizeChanged { boxSize = it }
                 .then(tapModifier)
                 .clip(RoundedCornerShape(4.dp))
-                .background(GreenFrame)
+                .background(Color.Black)
                 .border(
                     width = if (picking) 3.dp else 2.dp,
                     color = if (picking) Gold else Color.White,
@@ -315,7 +311,7 @@ private fun PreviewPanel(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                else -> Text(text = "Sem quadro", color = Color.White, fontSize = 12.sp)
+                else -> Text(text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
             }
         }
     }
@@ -344,8 +340,12 @@ private fun PlaybackBar(
     currentIndex: Int,
     frameCount: Int,
     fps: Int,
+    sourceFrameCount: Int,
+    startFrame: Int,
+    endFrame: Int,
     onTogglePlay: () -> Unit,
-    onFpsChange: (Int) -> Unit
+    onFpsChange: (Int) -> Unit,
+    onIntervalChange: (Int, Int) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
@@ -366,11 +366,27 @@ private fun PlaybackBar(
                 fontSize = 13.sp
             )
         }
+        if (sourceFrameCount > 1) {
+            XpSlider(
+                label = "Início",
+                value = startFrame.toFloat(),
+                onValueChange = { v -> onIntervalChange(v.toInt(), maxOf(v.toInt(), endFrame)) },
+                valueRange = 1f..sourceFrameCount.toFloat(),
+                displayFormatter = { "${it.toInt()}" }
+            )
+            XpSlider(
+                label = "Fim",
+                value = endFrame.toFloat(),
+                onValueChange = { v -> onIntervalChange(startFrame, maxOf(v.toInt(), startFrame)) },
+                valueRange = 1f..sourceFrameCount.toFloat(),
+                displayFormatter = { "${it.toInt()}" }
+            )
+        }
         XpSlider(
             label = "FPS",
             value = fps.toFloat(),
             onValueChange = { onFpsChange(it.toInt()) },
-            valueRange = 1f..30f,
+            valueRange = 1f..60f,
             displayFormatter = { "${it.toInt()} fps" }
         )
     }
@@ -392,7 +408,7 @@ private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit
                 modifier = Modifier
                     .size(56.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(GreenFrame)
+                    .background(Color.Black)
                     .border(
                         width = if (i == current) 3.dp else 1.dp,
                         color = if (i == current) Gold else Color.Black,
@@ -729,7 +745,7 @@ private fun AnalyzerPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .background(GreenFrame)
+                        .background(Color.Black)
                         .border(1.dp, Color.Black)
                 ) {
                     Image(

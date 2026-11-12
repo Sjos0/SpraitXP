@@ -27,14 +27,14 @@ interface PixelArtConverterUseCase {
 
 interface VideoFrameExtractorUseCase {
     /**
-     * Extrai quadros entre [startMs] e [endMs], amostrando a [fps] informada.
+     * Extrai os quadros de [firstFrame] até [lastFrame] (índices 0 based, na taxa [sourceFps] da origem).
      * Cada quadro é ajustado para um quadrado de [targetSide] pixels.
      */
     suspend fun extractFrames(
         videoUriString: String,
-        startMs: Long,
-        endMs: Long,
-        fps: Int,
+        firstFrame: Int,
+        lastFrame: Int,
+        sourceFps: Int,
         maxFrames: Int,
         targetSide: Int
     ): List<Bitmap>

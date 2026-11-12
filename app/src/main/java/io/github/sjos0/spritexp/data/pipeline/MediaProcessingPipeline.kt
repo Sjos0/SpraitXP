@@ -10,6 +10,8 @@ import android.net.Uri
 import android.util.Log
 import io.github.sjos0.spritexp.domain.usecase.SpriteSheetAnalyzerUseCase
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameExtractorUseCase
+import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
+import io.github.sjos0.spritexp.domain.usecase.VideoTiming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -45,6 +47,24 @@ class MediaProcessingPipeline(private val context: Context) :
     }
 
     /** Lê largura e altura de uma imagem sem decodificar os pixels. */
+    /** Duração e taxa de quadros da origem. */
+    fun probeVideoTiming(videoUriString: String): VideoTiming? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            setSource(retriever, videoUriString)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull() ?: return null
+            val rawFps = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
+                ?.toFloatOrNull()
+            VideoTiming(durationMs = durationMs, fps = VideoFrameMath.normalizeFps(rawFps))
+        } catch (e: Exception) {
+            Log.e(tag, "Falha ao ler o vídeo", e)
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
     fun probeImageSize(imageUriString: String): Pair<Int, Int>? {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         return try {
@@ -85,9 +105,9 @@ class MediaProcessingPipeline(private val context: Context) :
 
     override suspend fun extractFrames(
         videoUriString: String,
-        startMs: Long,
-        endMs: Long,
-        fps: Int,
+        firstFrame: Int,
+        lastFrame: Int,
+        sourceFps: Int,
         maxFrames: Int,
         targetSide: Int
     ): List<Bitmap> = withContext(Dispatchers.IO) {
@@ -95,17 +115,14 @@ class MediaProcessingPipeline(private val context: Context) :
         val retriever = MediaMetadataRetriever()
         try {
             setSource(retriever, videoUriString)
-            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                ?.toLongOrNull() ?: 0L
-            val last = minOf(endMs, durationMs)
-            // Intervalo entre amostras em milissegundos, derivado da taxa escolhida pelo usuário.
-            val stepMs = 1000L / fps.coerceIn(1, 30)
-
-            var t = startMs.coerceAtLeast(0L)
-            while (t <= last && frames.size < maxFrames) {
-                val frame = retriever.getFrameAtTime(t * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                if (frame != null) frames.add(squareCropCenter(frame, targetSide))
-                t += stepMs
+            val last = minOf(lastFrame, firstFrame + maxFrames - 1)
+            for (index in firstFrame.coerceAtLeast(0)..last) {
+                // Pede cada quadro pelo instante exato (OPTION_CLOSEST), sem parar no keyframe.
+                val frame = retriever.getFrameAtTime(
+                    VideoFrameMath.frameTimeUs(index, sourceFps),
+                    MediaMetadataRetriever.OPTION_CLOSEST
+                ) ?: break
+                frames.add(squareCropCenter(frame, targetSide))
             }
         } catch (e: Exception) {
             Log.e(tag, "Falha ao extrair quadros", e)
