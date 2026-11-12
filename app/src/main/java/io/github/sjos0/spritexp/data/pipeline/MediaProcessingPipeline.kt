@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
+import io.github.sjos0.spritexp.domain.usecase.SpriteMetadata
 import io.github.sjos0.spritexp.domain.usecase.SpriteSheetAnalyzerUseCase
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameExtractorUseCase
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
@@ -169,20 +170,47 @@ class MediaProcessingPipeline(private val context: Context) :
             sheet
         }
 
-    suspend fun exportZip(frames: List<Bitmap>, baseName: String): File =
-        withContext(Dispatchers.IO) {
+    /**
+     * ZIP completo para usar a sprite: spritesheet.png (ARGB, com transparência),
+     * metadata.json (grade, tamanho do quadro, fps e lista de quadros) e frames/frame_XX.png.
+     */
+    suspend fun exportSpriteBundle(frames: List<Bitmap>, columns: Int, fps: Int, baseName: String): File {
+        require(frames.isNotEmpty()) { "Nenhum quadro para exportar" }
+        val cols = maxOf(1, columns)
+        val rows = (frames.size + cols - 1) / cols
+        val sheet = createMergedSpriteSheet(frames, cols)
+        val json = SpriteMetadata.toJson(
+            imageName = SpriteMetadata.SHEET_FILE_NAME,
+            frameWidth = frames[0].width,
+            frameHeight = frames[0].height,
+            columns = cols,
+            rows = rows,
+            frameCount = frames.size,
+            fps = fps
+        )
+        return withContext(Dispatchers.IO) {
             val zipFile = File(context.cacheDir, "$baseName.zip")
             ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
+                zos.addEntry(SpriteMetadata.SHEET_FILE_NAME, pngBytes(sheet))
+                zos.addEntry("metadata.json", json.toByteArray(Charsets.UTF_8))
                 frames.forEachIndexed { i, frame ->
-                    val entryName = "${baseName}_frame_${String.format("%02d", i + 1)}.png"
-                    zos.putNextEntry(ZipEntry(entryName))
-                    val stream = ByteArrayOutputStream()
-                    frame.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                    zos.write(stream.toByteArray())
-                    zos.closeEntry()
+                    zos.addEntry("frames/frame_${"%02d".format(i + 1)}.png", pngBytes(frame))
                 }
             }
             zipFile
+        }
+    }
+
+    private fun ZipOutputStream.addEntry(name: String, bytes: ByteArray) {
+        putNextEntry(ZipEntry(name))
+        write(bytes)
+        closeEntry()
+    }
+
+    private fun pngBytes(bitmap: Bitmap): ByteArray =
+        ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.toByteArray()
         }
 
     suspend fun exportJsonMetadata(
@@ -194,28 +222,15 @@ class MediaProcessingPipeline(private val context: Context) :
         frameCount: Int,
         fps: Int
     ): File = withContext(Dispatchers.IO) {
-        val cols = maxOf(1, columns)
-        val frameEntries = (0 until frameCount).joinToString(",\n    ") { i ->
-            val col = i % cols
-            val row = i / cols
-            """{"filename": "frame_$i", "frame": {"x": ${col * frameWidth}, "y": ${row * frameHeight}, "w": $frameWidth, "h": $frameHeight}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": $frameWidth, "h": $frameHeight}, "sourceSize": {"w": $frameWidth, "h": $frameHeight}, "duration": ${1000 / maxOf(1, fps)}}"""
-        }
-        val json = """
-{
-  "meta": {
-    "app": "SpriteXP",
-    "version": "1.0",
-    "image": "$projectName.png",
-    "format": "RGBA8888",
-    "size": {"w": ${frameWidth * cols}, "h": ${frameHeight * rows}},
-    "scale": 1
-  },
-  "frames": [
-    $frameEntries
-  ]
-}
-""".trimIndent()
-
+        val json = SpriteMetadata.toJson(
+            imageName = "$projectName.png",
+            frameWidth = frameWidth,
+            frameHeight = frameHeight,
+            columns = columns,
+            rows = rows,
+            frameCount = frameCount,
+            fps = fps
+        )
         val jsonFile = File(context.cacheDir, "$projectName.json")
         jsonFile.writeText(json)
         jsonFile

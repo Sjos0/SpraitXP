@@ -557,7 +557,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 file.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 file
             }
-            ExportFormat.ZIP_PNGS -> mediaPipeline.exportZip(frames, base)
+            ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundle(frames, columns, fps, base)
             ExportFormat.JSON_METADATA -> mediaPipeline.exportJsonMetadata(
                 projectName = base,
                 frameWidth = frames[0].width,
