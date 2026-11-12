@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.sjos0.spritexp.BuildConfig
 import io.github.sjos0.spritexp.data.pipeline.MediaProcessingPipeline
+import io.github.sjos0.spritexp.data.storage.SpriteXpStorage
 import io.github.sjos0.spritexp.data.update.AppUpdater
 import io.github.sjos0.spritexp.data.update.InstallEvent
 import io.github.sjos0.spritexp.data.update.InstallEvents
@@ -555,23 +556,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isExporting = true, exportProgress = 0.1f)
+            _uiState.update { it.copy(isExporting = true, exportProgress = 0.1f) }
             val file = try {
                 writeExport(snapshot, frames)
             } catch (e: Exception) {
                 Log.e(tag, "Falha na exportação", e)
                 null
             }
-            _uiState.value = _uiState.value.copy(
-                exportProgress = 1f,
-                isExporting = false,
-                exportedFilePath = file?.absolutePath,
-                alertMessage = if (file != null) {
-                    "Exportação concluída! Arquivo gerado: ${file.name}"
-                } else {
-                    "Falha ao exportar. Tente novamente."
-                }
-            )
+            // Copia o resultado para Download/SpriteXP: a pasta de cache pode ser apagada pelo sistema.
+            val savedName = file?.let { f ->
+                withContext(Dispatchers.IO) { SpriteXpStorage.publish(getApplication(), f) }
+            }
+            _uiState.update {
+                it.copy(
+                    exportProgress = 1f,
+                    isExporting = false,
+                    exportedFilePath = file?.absolutePath,
+                    alertMessage = when {
+                        file == null -> "Falha ao exportar. Tente novamente."
+                        savedName == null ->
+                            "Exportado, mas não foi possível salvar em ${SpriteXpStorage.DISPLAY_DIR}. Verifique a permissão de armazenamento."
+                        else -> "Exportação salva em ${SpriteXpStorage.DISPLAY_DIR}/$savedName"
+                    }
+                )
+            }
             if (file != null) saveProject(snapshot, frames.size, file.absolutePath)
         }
     }
