@@ -214,30 +214,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val version = ++conversionVersion
         conversionJob?.cancel()
         conversionJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isConverting = true)
+            _uiState.update { it.copy(isConverting = true) }
+            try {
+                val palette = resolvePalette(frames.firstOrNull() ?: original, settings)
+                val convertedFrames = if (snapshot.sourceKind == SourceKind.VIDEO && frames.isNotEmpty()) {
+                    frames.map { convertOne(it, settings, palette) }
+                } else {
+                    emptyList()
+                }
+                val converted = original?.let { convertOne(it, settings, palette) }
+                val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
 
-            val palette = resolvePalette(frames.firstOrNull() ?: original, settings)
-            val convertedFrames = if (snapshot.sourceKind == SourceKind.VIDEO && frames.isNotEmpty()) {
-                frames.map { convertOne(it, settings, palette) }
-            } else {
-                emptyList()
-            }
-            val converted = original?.let { convertOne(it, settings, palette) }
-
-            val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
-
-            // Ignora resultado de um pedido que já foi substituído.
-            if (version == conversionVersion) {
-                _uiState.value = _uiState.value.copy(
-                    convertedBitmap = converted ?: _uiState.value.convertedBitmap,
-                    videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else _uiState.value.videoFrames,
-                    analyzerSheetBitmap = videoSheet?.bitmap ?: _uiState.value.analyzerSheetBitmap,
-                    analyzerColumns = videoSheet?.columns ?: _uiState.value.analyzerColumns,
-                    analyzerRows = videoSheet?.rows ?: _uiState.value.analyzerRows,
-                    analyzerSelectedRangeStart = if (videoSheet != null) 1 else _uiState.value.analyzerSelectedRangeStart,
-                    analyzerSelectedRangeEnd = if (videoSheet != null) convertedFrames.size else _uiState.value.analyzerSelectedRangeEnd,
-                    isConverting = false
-                )
+                // Ignora resultado de um pedido que já foi substituído.
+                if (version == conversionVersion) {
+                    _uiState.update { state ->
+                        state.copy(
+                            convertedBitmap = converted ?: state.convertedBitmap,
+                            videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else state.videoFrames,
+                            analyzerSheetBitmap = videoSheet?.bitmap ?: state.analyzerSheetBitmap,
+                            analyzerColumns = videoSheet?.columns ?: state.analyzerColumns,
+                            analyzerRows = videoSheet?.rows ?: state.analyzerRows,
+                            analyzerSelectedRangeStart = if (videoSheet != null) 1 else state.analyzerSelectedRangeStart,
+                            analyzerSelectedRangeEnd = if (videoSheet != null) convertedFrames.size else state.analyzerSelectedRangeEnd
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.e(tag, "Falha na conversão", e)
+                if (version == conversionVersion) {
+                    showAlert("Não foi possível converter. Ajuste as configurações e tente de novo.")
+                }
+            } finally {
+                // A prévia nunca fica presa em "Convertendo..." (sucesso, erro ou cancelamento).
+                if (version == conversionVersion) _uiState.update { it.copy(isConverting = false) }
             }
         }
     }
@@ -696,8 +707,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Ao voltar do segundo plano: limpa flags órfãs e refaz só a conversão se faltar prévia.
+     * Nunca reimporta o vídeo.
+     */
+    private fun reconcileAfterBackground() {
+        val s = _uiState.value
+        if (s.isImporting && !extractInFlight) {
+            _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
+        }
+        if (s.isConverting && conversionJob?.isActive != true) {
+            _uiState.update { it.copy(isConverting = false) }
+            requestPixelConversion()
+        }
+    }
+
     /** Ao voltar do Ajustes com a permissão liberada, continua a atualização sem novo toque. */
     fun onAppResumed() {
+        reconcileAfterBackground()
         val state = _updateState.value
         if (state.stage == UpdateStage.NEED_PERMISSION && state.info != null && updater.canInstallPackages()) {
             runUpdate(state.info)
