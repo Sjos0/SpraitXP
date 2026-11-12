@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.text.TextStyle
 import java.util.Locale
 import java.util.Date
 import java.text.SimpleDateFormat
@@ -408,6 +410,19 @@ private fun PresetsDialog(
                     onValueChange = { newName = it.take(40) },
                     singleLine = true,
                     label = { Text(text = "Nome do novo preset", fontFamily = PixelifyFontFamily) },
+                    // Cores explícitas: o dialog é bege e o tema da Activity é escuro (texto claro = invisível).
+                    textStyle = TextStyle(color = Color.Black, fontFamily = PixelifyFontFamily, fontSize = 14.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedBorderColor = Color(0xFF0A246A),
+                        unfocusedBorderColor = Color(0xFF808080),
+                        focusedLabelColor = Color(0xFF0A246A),
+                        unfocusedLabelColor = Color(0xFF4A4A4A),
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 XpButton(
@@ -436,22 +451,23 @@ private fun PresetsDialog(
                             fontFamily = PixelifyFontFamily,
                             fontSize = 11.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Um botão por linha: o nome completo cabe, sem "Car..." nem "Sobr...".
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             XpButton(
                                 text = "Carregar",
                                 onClick = { onApply(preset.id); onClose() },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                             XpButton(
                                 text = "Sobrescrever",
                                 onClick = { pending = PresetAction.OVERWRITE to preset },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                             XpButton(
                                 text = "Excluir",
                                 onClick = { pending = PresetAction.DELETE to preset },
                                 isDangerOrange = true,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
