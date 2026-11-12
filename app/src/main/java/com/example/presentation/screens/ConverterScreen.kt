@@ -10,6 +10,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.example.domain.model.ChromaMode
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,6 +89,8 @@ fun ConverterScreen(
     val context = LocalContext.current
     var zoom by remember { mutableFloatStateOf(1f) }
     var localFps by remember(fps) { mutableIntStateOf(fps.coerceIn(1, 30)) }
+    var pickingExtra by remember { mutableStateOf(false) }
+    var originalViewSize by remember { mutableStateOf(IntSize.Zero) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -200,7 +209,39 @@ fun ConverterScreen(
                                         .size(previewSize)
                                         .clip(RoundedCornerShape(3.dp))
                                         .background(Color(0xFF388E3C))
-                                        .border(2.dp, Color.White, RoundedCornerShape(3.dp)),
+                                        .border(2.dp, if (pickingExtra) Color.Yellow else Color.White, RoundedCornerShape(3.dp))
+                                        .onSizeChanged { originalViewSize = it }
+                                        .pointerInput(originalBitmap, originalViewSize, pickingExtra) {
+                                            detectTapGestures { offset: Offset ->
+                                                val bmp = originalBitmap ?: return@detectTapGestures
+                                                val vw = originalViewSize.width.toFloat().coerceAtLeast(1f)
+                                                val vh = originalViewSize.height.toFloat().coerceAtLeast(1f)
+                                                val bw = bmp.width.toFloat()
+                                                val bh = bmp.height.toFloat()
+                                                val scale = minOf(vw / bw, vh / bh)
+                                                val dispW = bw * scale
+                                                val dispH = bh * scale
+                                                val left = (vw - dispW) / 2f
+                                                val top = (vh - dispH) / 2f
+                                                val lx = offset.x - left
+                                                val ly = offset.y - top
+                                                if (lx < 0f || ly < 0f || lx >= dispW || ly >= dispH) return@detectTapGestures
+                                                val px = (lx / scale).toInt().coerceIn(0, bmp.width - 1)
+                                                val py = (ly / scale).toInt().coerceIn(0, bmp.height - 1)
+                                                val argb = bmp.getPixel(px, py)
+                                                val picked = Color(argb)
+                                                if (pickingExtra) {
+                                                    onSettingsChange { s ->
+                                                        val list = s.extraChromaColors.toMutableList()
+                                                        if (list.size < 3) list.add(picked)
+                                                        s.copy(extraChromaColors = list)
+                                                    }
+                                                    pickingExtra = false
+                                                } else {
+                                                    onSettingsChange { it.copy(chromaKeyColor = picked) }
+                                                }
+                                            }
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (originalBitmap != null) {
@@ -374,20 +415,11 @@ fun ConverterScreen(
                                 .size(28.dp)
                                 .background(settings.chromaKeyColor)
                                 .border(2.dp, Color.Black)
-                                .clickable {
-                                    val next = when (settings.chromaKeyColor) {
-                                        Color(0xFF00FF00) -> Color(0xFFFF00FF)
-                                        Color(0xFFFF00FF) -> Color(0xFF00FFFF)
-                                        Color(0xFF00FFFF) -> Color(0xFF0000FF)
-                                        else -> Color(0xFF00FF00)
-                                    }
-                                    onSettingsChange { it.copy(chromaKeyColor = next) }
-                                }
                                 .testTag("converter_chroma_swatch")
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "toque para alternar",
+                            text = if (pickingExtra) "toque na ORIGINAL p/ cor extra" else "toque na ORIGINAL p/ escolher",
                             fontFamily = VT323FontFamily,
                             fontSize = 14.sp,
                             color = Color(0xFF555555)
@@ -396,15 +428,139 @@ fun ConverterScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    XpSlider(
-                        label = "Tolerância",
-                        value = settings.chromaTolerance,
-                        onValueChange = { tol ->
-                            onSettingsChange { it.copy(chromaTolerance = tol) }
-                        },
-                        valueRange = 0f..100f,
-                        displayFormatter = { "${it.toInt()}%" }
+                    Text(
+                        text = "Modo",
+                        fontFamily = PixelifyFontFamily,
+                        fontSize = 13.sp,
+                        color = XpTextBlack
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        XpRadioButton(
+                            selected = settings.chromaMode == ChromaMode.DISTANCE,
+                            onClick = { onSettingsChange { it.copy(chromaMode = ChromaMode.DISTANCE) } },
+                            label = "Distância"
+                        )
+                        XpRadioButton(
+                            selected = settings.chromaMode == ChromaMode.HUE,
+                            onClick = { onSettingsChange { it.copy(chromaMode = ChromaMode.HUE) } },
+                            label = "Matiz"
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (settings.chromaMode == ChromaMode.DISTANCE) {
+                        XpSlider(
+                            label = "Tolerância",
+                            value = settings.chromaTolerance,
+                            onValueChange = { tol ->
+                                onSettingsChange { it.copy(chromaTolerance = tol) }
+                            },
+                            valueRange = 0f..100f,
+                            displayFormatter = { "${it.toInt()}%" }
+                        )
+                    } else {
+                        XpSlider(
+                            label = "Tolerância de matiz",
+                            value = settings.chromaHueTolerance,
+                            onValueChange = { v ->
+                                onSettingsChange { it.copy(chromaHueTolerance = v) }
+                            },
+                            valueRange = 0f..90f,
+                            displayFormatter = { "${it.toInt()}°" }
+                        )
+                        XpSlider(
+                            label = "Saturação mínima",
+                            value = settings.chromaSatMin,
+                            onValueChange = { v ->
+                                onSettingsChange { it.copy(chromaSatMin = v) }
+                            },
+                            valueRange = 0f..1f,
+                            displayFormatter = { "%.2f".format(it) }
+                        )
+                        XpSlider(
+                            label = "Brilho mínimo",
+                            value = settings.chromaValMin,
+                            onValueChange = { v ->
+                                onSettingsChange { it.copy(chromaValMin = v) }
+                            },
+                            valueRange = 0f..1f,
+                            displayFormatter = { "%.2f".format(it) }
+                        )
+                    }
+
+                    XpSlider(
+                        label = "Suavização da borda",
+                        value = settings.chromaFeather,
+                        onValueChange = { v ->
+                            onSettingsChange { it.copy(chromaFeather = v) }
+                        },
+                        valueRange = 0f..30f,
+                        displayFormatter = { "${it.toInt()}" }
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSettingsChange { it.copy(chromaDespill = !it.chromaDespill) }
+                            }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .border(2.dp, Color(0xFF7F9DB9))
+                                .background(if (settings.chromaDespill) XpStartGreen else Color.White)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Remover vazamento de verde",
+                            fontFamily = PixelifyFontFamily,
+                            fontSize = 14.sp,
+                            color = XpTextBlack
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Cores extras (${settings.extraChromaColors.size}/3)",
+                        fontFamily = PixelifyFontFamily,
+                        fontSize = 12.sp,
+                        color = XpTextBlack
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        settings.extraChromaColors.forEachIndexed { idx, c ->
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(c)
+                                    .border(1.dp, Color.Black)
+                                    .clickable {
+                                        onSettingsChange { s ->
+                                            s.copy(extraChromaColors = s.extraChromaColors.filterIndexed { i, _ -> i != idx })
+                                        }
+                                    }
+                            ) {
+                                Text("X", color = Color.White, fontSize = 10.sp, modifier = Modifier.align(Alignment.Center))
+                            }
+                        }
+                        if (settings.extraChromaColors.size < 3) {
+                            XpButton(
+                                text = "+ Adicionar cor",
+                                onClick = { pickingExtra = true },
+                                modifier = Modifier.height(32.dp),
+                                testTag = "converter_add_chroma_color"
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
