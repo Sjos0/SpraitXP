@@ -39,6 +39,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,12 +67,15 @@ private val PanelBg = Color(0xFF2A2A2E)
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
 private val Muted = Color(0xFFBBBBBB)
+/** Texto de apoio sobre superfícies claras (GroupBox): cinza escuro para contraste. */
+private val HintOnLight = Color(0xFF4A4A4A)
 
-private enum class WorkTab(val label: String) {
-    AJUSTES("Ajustes"),
-    PALETA("Paleta"),
-    EXPORTAR("Exportar"),
-    ANALISADOR("Analisador")
+private enum class WorkTab(val label: String, val icon: ImageVector) {
+    AJUSTES("Ajustes", Icons.Filled.Tune),
+    ANIMACAO("Animar", Icons.Filled.Timer),
+    PALETA("Paleta", Icons.Filled.Palette),
+    EXPORTAR("Exportar", Icons.Filled.Download),
+    ANALISADOR("Sheet", Icons.Filled.GridOn)
 }
 
 /**
@@ -131,12 +144,12 @@ fun WorkScreen(
             }
         }
 
+        // Área fixa: importação, prévias, play e linha do tempo ficam sempre visíveis.
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             XpButton(
                 text = if (isImporting) "Importando vídeo..." else "Importar vídeo",
@@ -162,25 +175,37 @@ fun WorkScreen(
                 isPlaying = isPlaying,
                 currentIndex = currentFrameIndex,
                 frameCount = frameCount,
-                fps = fps,
-                sourceFrameCount = sourceFrameCount,
-                startFrame = startFrame,
-                endFrame = endFrame,
-                onTogglePlay = onTogglePlay,
-                onFpsChange = onFpsChange,
-                onIntervalChange = onIntervalChange
+                onTogglePlay = onTogglePlay
             )
 
             Timeline(frames = frames, current = currentFrameIndex, onSelect = onSelectFrame)
+        }
 
-            TabRow(selected = tab, onSelect = { tab = it })
+        ToolDock(selected = tab, onSelect = { tab = it })
 
+        // Só o painel da ferramenta rola; prévias e play continuam no topo, sem voltar a tela.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             when (tab) {
                 WorkTab.AJUSTES -> AdjustmentsPanel(
                     settings = settings,
                     onSettingsChange = onSettingsChange,
                     picking = picking,
                     onTogglePicking = { picking = !picking }
+                )
+                WorkTab.ANIMACAO -> AnimationPanel(
+                    sourceFrameCount = sourceFrameCount,
+                    startFrame = startFrame,
+                    endFrame = endFrame,
+                    fps = fps,
+                    onIntervalChange = onIntervalChange,
+                    onFpsChange = onFpsChange
                 )
                 WorkTab.PALETA -> PalettePanel(settings = settings, onSettingsChange = onSettingsChange)
                 WorkTab.EXPORTAR -> ExportPanel(
@@ -291,7 +316,7 @@ private fun PreviewPanel(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .height(140.dp)
                 .onSizeChanged { boxSize = it }
                 .then(tapModifier)
                 .clip(RoundedCornerShape(4.dp))
@@ -339,56 +364,66 @@ private fun PlaybackBar(
     isPlaying: Boolean,
     currentIndex: Int,
     frameCount: Int,
-    fps: Int,
+    onTogglePlay: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        XpButton(
+            text = if (isPlaying) "Pausar" else "Play",
+            onClick = onTogglePlay,
+            isPrimaryGreen = true,
+            modifier = Modifier.width(120.dp),
+            testTag = "work_play"
+        )
+        Text(
+            text = "Quadro ${currentIndex + 1}/$frameCount",
+            color = Color.White,
+            fontSize = 13.sp
+        )
+    }
+}
+
+/** Intervalo e velocidade da animação. Mudanças aparecem nas prévias do topo sem reimportar. */
+@Composable
+private fun AnimationPanel(
     sourceFrameCount: Int,
     startFrame: Int,
     endFrame: Int,
-    onTogglePlay: () -> Unit,
-    onFpsChange: (Int) -> Unit,
-    onIntervalChange: (Int, Int) -> Unit
+    fps: Int,
+    onIntervalChange: (Int, Int) -> Unit,
+    onFpsChange: (Int) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            XpButton(
-                text = if (isPlaying) "Pausar" else "Play",
-                onClick = onTogglePlay,
-                isPrimaryGreen = true,
-                modifier = Modifier.width(120.dp),
-                testTag = "work_play"
-            )
-            Text(
-                text = "Quadro ${currentIndex + 1}/$frameCount",
-                color = Color.White,
-                fontSize = 13.sp
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        XpGroupBox(title = "Animação") {
+            if (sourceFrameCount > 1) {
+                XpSlider(
+                    label = "Início",
+                    value = startFrame.toFloat(),
+                    onValueChange = { v -> onIntervalChange(v.toInt(), maxOf(v.toInt(), endFrame)) },
+                    valueRange = 1f..sourceFrameCount.toFloat(),
+                    displayFormatter = { "${it.toInt()}" }
+                )
+                XpSlider(
+                    label = "Fim",
+                    value = endFrame.toFloat(),
+                    onValueChange = { v -> onIntervalChange(startFrame, maxOf(v.toInt(), startFrame)) },
+                    valueRange = 1f..sourceFrameCount.toFloat(),
+                    displayFormatter = { "${it.toInt()}" }
+                )
+            } else {
+                Text(text = "Importe um vídeo para escolher o intervalo.", color = HintOnLight, fontSize = 12.sp)
+            }
+            XpSlider(
+                label = "FPS",
+                value = fps.toFloat(),
+                onValueChange = { onFpsChange(it.toInt()) },
+                valueRange = 1f..60f,
+                displayFormatter = { "${it.toInt()} fps" }
             )
         }
-        if (sourceFrameCount > 1) {
-            XpSlider(
-                label = "Início",
-                value = startFrame.toFloat(),
-                onValueChange = { v -> onIntervalChange(v.toInt(), maxOf(v.toInt(), endFrame)) },
-                valueRange = 1f..sourceFrameCount.toFloat(),
-                displayFormatter = { "${it.toInt()}" }
-            )
-            XpSlider(
-                label = "Fim",
-                value = endFrame.toFloat(),
-                onValueChange = { v -> onIntervalChange(startFrame, maxOf(v.toInt(), startFrame)) },
-                valueRange = 1f..sourceFrameCount.toFloat(),
-                displayFormatter = { "${it.toInt()}" }
-            )
-        }
-        XpSlider(
-            label = "FPS",
-            value = fps.toFloat(),
-            onValueChange = { onFpsChange(it.toInt()) },
-            valueRange = 1f..60f,
-            displayFormatter = { "${it.toInt()} fps" }
-        )
     }
 }
 
@@ -406,7 +441,7 @@ private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit
         items(frames.size) { i ->
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(Color.Black)
                     .border(
@@ -427,22 +462,45 @@ private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit
     }
 }
 
+/** Dock de ícones: cada ferramenta vira uma caixinha, sem texto cortado. */
 @Composable
-private fun TabRow(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
+private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .background(PanelBg)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        WorkTab.values().forEach { t ->
-            XpButton(
-                text = t.label,
-                onClick = { onSelect(t) },
-                isPrimaryGreen = t == selected,
-                modifier = Modifier.width(110.dp),
-                testTag = "work_tab_${t.name.lowercase()}"
-            )
+        WorkTab.values().forEach { tool ->
+            val isSelected = tool == selected
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isSelected) GreenFrame else Color(0xFF3A3A40))
+                    .border(1.dp, if (isSelected) Gold else Color.Black, RoundedCornerShape(4.dp))
+                    .clickable { onSelect(tool) }
+                    .padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Icon(
+                    imageVector = tool.icon,
+                    contentDescription = tool.label,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = tool.label,
+                    color = Color.White,
+                    fontFamily = PixelifyFontFamily,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
         }
     }
 }
@@ -477,7 +535,7 @@ private fun AdjustmentsPanel(
             }
             Text(
                 text = if (picking) "Toque na imagem ORIGINAL no pixel do fundo." else "Escolha a cor do fundo tocando na imagem.",
-                color = Muted,
+                color = HintOnLight,
                 fontSize = 11.sp
             )
             XpRadioButton(
@@ -583,7 +641,7 @@ private fun AdjustmentsPanel(
             )
             Text(
                 text = "Saída: ${settings.targetResolution * settings.displayScale} px",
-                color = Muted,
+                color = HintOnLight,
                 fontSize = 12.sp
             )
         }
@@ -688,7 +746,7 @@ private fun ExportPanel(
                 testTag = "work_export_sheet"
             )
             XpButton(
-                text = "Baixar PNGs (ZIP)",
+                text = "Baixar ZIP completo",
                 onClick = onExportZip,
                 enabled = hasFrames && !isExporting,
                 modifier = Modifier.fillMaxWidth(),
@@ -711,11 +769,11 @@ private fun ExportPanel(
                 }
             }
             if (!hasFrames) {
-                Text(text = "Importe um vídeo antes de exportar.", color = Muted, fontSize = 12.sp)
+                Text(text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
         XpGroupBox(title = "Automator") {
-            Text(text = "Em breve", color = Muted, fontSize = 12.sp)
+            Text(text = "Em breve", color = HintOnLight, fontSize = 12.sp)
         }
     }
 }
@@ -771,7 +829,7 @@ private fun AnalyzerPanel(
                     displayFormatter = { "${it.toInt()}" }
                 )
             } else {
-                Text(text = "Abra uma sprite sheet 1:1 para analisar.", color = Muted, fontSize = 12.sp)
+                Text(text = "Abra uma sprite sheet 1:1 para analisar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
     }
