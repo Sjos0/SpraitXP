@@ -1,5 +1,13 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -177,6 +185,58 @@ fun XpRadioButton(
             fontFamily = PixelifyFontFamily,
             fontSize = 14.sp
         )
+    }
+}
+
+/**
+ * Group Box que abre e fecha ao tocar no título. Começa fechado por padrão.
+ */
+@Composable
+fun XpCollapsibleGroupBox(
+    title: String,
+    modifier: Modifier = Modifier,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFD4D0C8), RoundedCornerShape(4.dp))
+            .padding(1.dp)
+            .border(1.dp, Color(0xFFFFFFFF), RoundedCornerShape(3.dp))
+            .background(XpWindowBg)
+            .padding(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(bottom = if (expanded) 6.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = LunaTitleStart,
+                fontFamily = PixelifyFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (expanded) "[-]" else "[+]",
+                color = LunaTitleStart,
+                fontFamily = VT323FontFamily,
+                fontSize = 18.sp
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(animationSpec = tween(400)) + fadeIn(animationSpec = tween(400)),
+            exit = shrinkVertically(animationSpec = tween(350)) + fadeOut(animationSpec = tween(350))
+        ) {
+            Column { content() }
+        }
     }
 }
 

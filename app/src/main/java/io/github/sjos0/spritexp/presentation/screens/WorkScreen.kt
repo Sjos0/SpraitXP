@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import io.github.sjos0.spritexp.presentation.components.XpCollapsibleGroupBox
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -65,7 +66,6 @@ import io.github.sjos0.spritexp.domain.model.DitherMode
 import io.github.sjos0.spritexp.domain.model.PalettePreset
 import io.github.sjos0.spritexp.domain.model.PixelArtSettings
 import io.github.sjos0.spritexp.presentation.components.XpButton
-import io.github.sjos0.spritexp.presentation.components.XpGroupBox
 import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
 import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
@@ -510,7 +510,7 @@ private fun AnimationPanel(
     onFpsChange: (Int) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Animação") {
+        XpCollapsibleGroupBox(title = "Animação") {
             if (sourceFrameCount > 1) {
                 XpSlider(
                     label = "Início",
@@ -626,7 +626,7 @@ private fun AdjustmentsPanel(
     onTogglePicking: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Remoção de fundo") {
+        XpCollapsibleGroupBox(title = "Remoção de fundo") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -708,7 +708,7 @@ private fun AdjustmentsPanel(
             )
         }
 
-        XpGroupBox(title = "Aprimoramento") {
+        XpCollapsibleGroupBox(title = "Aprimoramento") {
             XpSlider(
                 label = "Realce de bordas",
                 value = settings.edgeEnhance,
@@ -732,7 +732,7 @@ private fun AdjustmentsPanel(
             )
         }
 
-        XpGroupBox(title = "Resolução e escala") {
+        XpCollapsibleGroupBox(title = "Resolução e escala") {
             XpSlider(
                 label = "Lado (px, 1:1)",
                 value = settings.targetResolution.toFloat(),
@@ -784,7 +784,7 @@ private fun ChipRow(options: List<Int>, selected: Int, suffix: String, onPick: (
 private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelArtSettings) -> PixelArtSettings) -> Unit) {
     val isAuto = settings.palettePreset == PalettePreset.AUTO_EXTRACT
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Paleta de cores") {
+        XpCollapsibleGroupBox(title = "Paleta de cores") {
             XpRadioButton(
                 selected = isAuto,
                 onClick = { onSettingsChange { it.copy(palettePreset = PalettePreset.AUTO_EXTRACT) } },
@@ -828,7 +828,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
             }
         }
 
-        XpGroupBox(title = "Dithering") {
+        XpCollapsibleGroupBox(title = "Dithering") {
             DitherMode.values().forEach { m ->
                 XpRadioButton(
                     selected = settings.ditherMode == m,
@@ -849,7 +849,7 @@ private fun ExportPanel(
     onExportZip: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Exportar quadros") {
+        XpCollapsibleGroupBox(title = "Exportar quadros") {
             XpButton(
                 text = "Baixar Sprite Sheet (PNG)",
                 onClick = onExportSheet,
@@ -885,7 +885,7 @@ private fun ExportPanel(
                 Text(text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
-        XpGroupBox(title = "Automator") {
+        XpCollapsibleGroupBox(title = "Automator") {
             Text(text = "Em breve", color = HintOnLight, fontSize = 12.sp)
         }
     }
@@ -903,7 +903,7 @@ private fun AnalyzerPanel(
 ) {
     val total = (columns * rows).coerceAtLeast(1)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        XpGroupBox(title = "Analisador de sprite sheet") {
+        XpCollapsibleGroupBox(title = "Analisador de sprite sheet") {
             XpButton(
                 text = "Abrir sprite sheet",
                 onClick = onPickSheet,
