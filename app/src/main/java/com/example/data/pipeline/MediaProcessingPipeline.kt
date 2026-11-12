@@ -104,7 +104,7 @@ class MediaProcessingPipeline(private val context: Context) :
             var t = startMs.coerceAtLeast(0L)
             while (t <= last && frames.size < maxFrames) {
                 val frame = retriever.getFrameAtTime(t * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                if (frame != null) frames.add(squareFit(frame, targetSide))
+                if (frame != null) frames.add(squareCropCenter(frame, targetSide))
                 t += stepMs
             }
         } catch (e: Exception) {
@@ -212,9 +212,15 @@ class MediaProcessingPipeline(private val context: Context) :
         }
     }
 
-    /** Ajusta o quadro para um quadrado de [side] pixels. Entradas são 1:1, então é só redimensionar. */
-    private fun squareFit(src: Bitmap, side: Int): Bitmap {
-        if (src.width == side && src.height == side) return src
-        return Bitmap.createScaledBitmap(src, side, side, true)
+    /**
+     * Recorta o maior quadrado centralizado do quadro (proporção 1:1) e ajusta para [side] pixels.
+     * Vídeos em outra proporção (retrato, paisagem) perdem as bordas laterais ou superior/inferior.
+     */
+    private fun squareCropCenter(src: Bitmap, side: Int): Bitmap {
+        val s = minOf(src.width, src.height)
+        val x = (src.width - s) / 2
+        val y = (src.height - s) / 2
+        val cropped = Bitmap.createBitmap(src, x, y, s, s)
+        return if (s == side) cropped else Bitmap.createScaledBitmap(cropped, side, side, true)
     }
 }
