@@ -785,6 +785,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
                 onClick = { onSettingsChange { it.copy(palettePreset = PalettePreset.AUTO_EXTRACT) } },
                 label = "Extração automática"
             )
+            // Auto só acrescenta o slider de máximo de cores; as outras paletas continuam listadas.
             if (isAuto) {
                 XpSlider(
                     label = "Máx. de cores",
@@ -793,14 +794,13 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
                     valueRange = 2f..64f,
                     displayFormatter = { "${it.toInt()}" }
                 )
-            } else {
-                PalettePreset.values().filter { it != PalettePreset.AUTO_EXTRACT }.forEach { p ->
-                    XpRadioButton(
-                        selected = settings.palettePreset == p,
-                        onClick = { onSettingsChange { it.copy(palettePreset = p) } },
-                        label = p.displayName
-                    )
-                }
+            }
+            PalettePreset.values().filter { it != PalettePreset.AUTO_EXTRACT }.forEach { p ->
+                XpRadioButton(
+                    selected = settings.palettePreset == p,
+                    onClick = { onSettingsChange { it.copy(palettePreset = p) } },
+                    label = p.displayName
+                )
             }
             val swatches = settings.palettePreset.colors
             if (swatches.isNotEmpty()) {
