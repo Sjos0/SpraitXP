@@ -2,38 +2,30 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import com.example.presentation.components.UpdateDialogHost
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.ExportFormat
+import com.example.presentation.components.UpdateDialogHost
 import com.example.presentation.components.XpStartMenu
 import com.example.presentation.components.XpTaskbar
-import com.example.presentation.screens.AnalyzerScreen
-import com.example.presentation.screens.ConverterScreen
-import com.example.presentation.screens.DesktopScreen
-import com.example.presentation.screens.ExportScreen
-import com.example.presentation.screens.PaletteScreen
 import com.example.presentation.screens.ProjectsScreen
 import com.example.presentation.screens.SettingsScreen
 import com.example.presentation.screens.SplashScreen
-import com.example.presentation.screens.VideoScreen
+import com.example.presentation.screens.WorkScreen
 import com.example.presentation.viewmodel.MainViewModel
 import com.example.ui.theme.SpriteXPTheme
 
@@ -59,12 +51,11 @@ class MainActivity : ComponentActivity() {
             UpdateDialogHost(viewModel = viewModel)
 
             SpriteXPTheme(darkTheme = state.isDarkTheme) {
-                // Manipulador de botão voltar do Android (BackHandler)
-                BackHandler(enabled = state.currentScreen != "desktop" && state.currentScreen != "splash") {
+                BackHandler(enabled = state.currentScreen != "work" && state.currentScreen != "splash") {
                     if (state.isStartMenuOpen) {
                         viewModel.toggleStartMenu()
                     } else {
-                        viewModel.navigateTo("desktop")
+                        viewModel.navigateTo("work")
                     }
                 }
 
@@ -78,19 +69,14 @@ class MainActivity : ComponentActivity() {
                                 isStartMenuOpen = state.isStartMenuOpen,
                                 onStartClick = { viewModel.toggleStartMenu() },
                                 activeScreenName = when (state.currentScreen) {
-                                    "converter" -> "Conversor"
-                                    "video" -> "Vídeo"
-                                    "analyzer" -> "Analisador"
-                                    "palette" -> "Paleta"
-                                    "export" -> "Exportar"
+                                    "work" -> "Trabalho"
                                     "projects" -> "Meus Projetos"
                                     "settings" -> "Configurações"
-                                    else -> "Área de Trabalho"
+                                    else -> "Trabalho"
                                 },
                                 onActiveTaskClick = {
-                                    // Alterna ou minimiza
-                                    if (state.currentScreen != "desktop") {
-                                        viewModel.navigateTo("desktop")
+                                    if (state.currentScreen != "work") {
+                                        viewModel.navigateTo("work")
                                     }
                                 }
                             )
@@ -101,131 +87,97 @@ class MainActivity : ComponentActivity() {
                                 .fillMaxSize()
                                 .padding(innerPadding)
                         ) {
-                            // Renderiza a Área de Trabalho base
-                            DesktopScreen(
-                                alertMessage = state.alertMessage,
-                                onDismissAlert = { viewModel.dismissAlert() },
-                                onNavigate = { screen -> viewModel.navigateTo(screen) }
-                            )
-
-                            // Renderiza a Janela da Aplicação Aberta com transição
-                            if (state.currentScreen != "desktop") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0x33000000))
-                                ) {
-                                    when (state.currentScreen) {
-                                        "converter" -> {
-                                            ConverterScreen(
-                                                originalBitmap = state.originalBitmap,
-                                                convertedBitmap = state.convertedBitmap,
-                                                isConverting = state.isConverting,
-                                                settings = state.pixelSettings,
-                                                onSettingsChange = { transform -> viewModel.updatePixelSettings(transform) },
-                                                onImagePicked = { bmp -> viewModel.setOriginalImage(bmp) },
-                                                onExportClick = { viewModel.navigateTo("export") },
-                                                onCloseClick = { viewModel.navigateTo("desktop") },
-                                                frameCount = state.videoFrames.size.coerceAtLeast(1),
-                                                fps = state.videoFps,
-                                                onFpsChange = { f -> viewModel.setVideoFps(f) },
-                                                onQuickPlay = { viewModel.toggleVideoPlay() },
-                                                onRenderPlay = { viewModel.toggleVideoPlay() }
+                            when (state.currentScreen) {
+                                "work" -> {
+                                    WorkScreen(
+                                        settings = state.pixelSettings,
+                                        onSettingsChange = { t -> viewModel.updatePixelSettings(t) },
+                                        originalFrame = viewModel.currentRawFrame(),
+                                        convertedFrame = viewModel.currentConvertedFrame(),
+                                        isConverting = state.isConverting,
+                                        frames = state.videoFrames,
+                                        currentFrameIndex = state.currentFrameIndex,
+                                        frameCount = state.videoFrames.size.coerceAtLeast(1),
+                                        isPlaying = state.isPlayingPreview,
+                                        fps = state.videoFps,
+                                        startFrame = state.videoStartFrame,
+                                        endFrame = state.videoEndFrame,
+                                        isImporting = state.isImporting,
+                                        onPickVideo = { videoPicker.launch("video/*") },
+                                        onTogglePlay = { viewModel.toggleVideoPlay() },
+                                        onFpsChange = { viewModel.setVideoFps(it) },
+                                        onIntervalChange = { s, e -> viewModel.setVideoInterval(s, e) },
+                                        onSelectFrame = { viewModel.selectVideoFrame(it) },
+                                        onExportSheet = {
+                                            viewModel.setExportFormat(ExportFormat.SPRITE_SHEET_PNG)
+                                            viewModel.executeExport()
+                                        },
+                                        onExportZip = {
+                                            viewModel.setExportFormat(ExportFormat.ZIP_PNGS)
+                                            viewModel.executeExport()
+                                        },
+                                        isExporting = state.isExporting,
+                                        exportProgress = state.exportProgress,
+                                        analyzerSheet = state.analyzerSheetBitmap,
+                                        analyzerColumns = state.analyzerColumns,
+                                        analyzerRows = state.analyzerRows,
+                                        analyzerStart = state.analyzerSelectedRangeStart,
+                                        analyzerEnd = state.analyzerSelectedRangeEnd,
+                                        analyzerFps = state.analyzerFps,
+                                        onAnalyzerRange = { s, e -> viewModel.setAnalyzerRange(s, e) },
+                                        onPickSheet = { sheetPicker.launch("image/*") },
+                                        onNavigateProjects = { viewModel.navigateTo("projects") },
+                                        onNavigateSettings = { viewModel.navigateTo("settings") },
+                                        onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
+                                        onShowAbout = {
+                                            viewModel.showAlert(
+                                                "SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa\nAndroid 8.0+"
                                             )
                                         }
-                                        "video" -> {
-                                            VideoScreen(
-                                                frames = state.videoFrames,
-                                                startFrame = state.videoStartFrame,
-                                                endFrame = state.videoEndFrame,
-                                                currentFrameIndex = state.currentFrameIndex,
-                                                isPlaying = state.isPlayingPreview,
-                                                fps = state.videoFps,
-                                                onIntervalChange = { s: Int, e: Int -> viewModel.setVideoInterval(s, e) },
-                                                onFpsChange = { fps: Int -> viewModel.setVideoFps(fps) },
-                                                onSelectFrame = { idx: Int -> viewModel.selectVideoFrame(idx) },
-                                                onTogglePlay = { viewModel.toggleVideoPlay() },
-                                                onPickVideo = { videoPicker.launch("video/*") },
-                                                isImporting = state.isImporting,
-                                                onExportClick = { viewModel.navigateTo("export") },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                        "analyzer" -> {
-                                            AnalyzerScreen(
-                                                sheetBitmap = state.analyzerSheetBitmap,
-                                                columns = state.analyzerColumns,
-                                                rows = state.analyzerRows,
-                                                startRange = state.analyzerSelectedRangeStart,
-                                                endRange = state.analyzerSelectedRangeEnd,
-                                                fps = state.analyzerFps,
-                                                onRangeChange = { s, e -> viewModel.setAnalyzerRange(s, e) },
-                                                onPickSheet = { sheetPicker.launch("image/*") },
-                                                onExportClick = { viewModel.navigateTo("export") },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                        "palette" -> {
-                                            PaletteScreen(
-                                                settings = state.pixelSettings,
-                                                previewBitmap = state.convertedBitmap ?: state.originalBitmap,
-                                                onSettingsChange = { transform -> viewModel.updatePixelSettings(transform) },
-                                                onApply = {
-                                                    viewModel.requestPixelConversion()
-                                                    viewModel.navigateTo("converter")
-                                                },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                        "projects" -> {
-                                            ProjectsScreen(
-                                                projects = projects,
-                                                onNewProject = { viewModel.navigateTo("converter") },
-                                                onOpenProject = { _ -> viewModel.navigateTo("analyzer") },
-                                                onDeleteProject = { id -> viewModel.deleteProject(id) },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                        "export" -> {
-                                            ExportScreen(
-                                                currentFormat = state.exportFormat,
-                                                isExporting = state.isExporting,
-                                                progress = state.exportProgress,
-                                                onFormatChange = { fmt -> viewModel.setExportFormat(fmt) },
-                                                onExportClick = { viewModel.executeExport() },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                        "settings" -> {
-                                            SettingsScreen(
-                                                isDarkTheme = state.isDarkTheme,
-                                                soundEnabled = state.soundEnabled,
-                                                language = state.language,
-                                                onDarkThemeChange = { d -> viewModel.setDarkTheme(d) },
-                                                onSoundChange = { s -> viewModel.setSoundEnabled(s) },
-                                                onLanguageChange = { l -> viewModel.setLanguage(l) },
-                                                onShowAbout = {
-                                                    viewModel.showAlert("SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa (Clean Architecture)\nCompatível com Android 8.0+")
-                                                },
-                                                onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
-                                                onCloseClick = { viewModel.navigateTo("desktop") }
-                                            )
-                                        }
-                                    }
+                                    )
                                 }
+                                "projects" -> ProjectsScreen(
+                                    projects = projects,
+                                    onNewProject = { viewModel.navigateTo("work") },
+                                    onOpenProject = { _ -> viewModel.navigateTo("work") },
+                                    onDeleteProject = { id -> viewModel.deleteProject(id) },
+                                    onCloseClick = { viewModel.navigateTo("work") }
+                                )
+                                "settings" -> SettingsScreen(
+                                    isDarkTheme = state.isDarkTheme,
+                                    soundEnabled = state.soundEnabled,
+                                    language = state.language,
+                                    onDarkThemeChange = { viewModel.setDarkTheme(it) },
+                                    onSoundChange = { viewModel.setSoundEnabled(it) },
+                                    onLanguageChange = { viewModel.setLanguage(it) },
+                                    onShowAbout = {
+                                        viewModel.showAlert(
+                                            "SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa\nAndroid 8.0+"
+                                        )
+                                    },
+                                    onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
+                                    onCloseClick = { viewModel.navigateTo("work") }
+                                )
+                                else -> viewModel.navigateTo("work")
                             }
 
-                            // Menu Iniciar Flutuante
                             if (state.isStartMenuOpen) {
                                 Box(
-                                    modifier = Modifier
+                                    Modifier
                                         .fillMaxSize()
                                         .clickable { viewModel.toggleStartMenu() }
                                 ) {
                                     XpStartMenu(
                                         isOpen = true,
                                         onDismiss = { viewModel.toggleStartMenu() },
-                                        onNavigate = { screen -> viewModel.navigateTo(screen) },
+                                        onNavigate = { screen ->
+                                            val target = when (screen) {
+                                                "desktop", "converter", "video", "analyzer",
+                                                "palette", "export" -> "work"
+                                                else -> screen
+                                            }
+                                            viewModel.navigateTo(target)
+                                        },
                                         modifier = Modifier
                                             .align(Alignment.BottomStart)
                                             .padding(bottom = 2.dp)
