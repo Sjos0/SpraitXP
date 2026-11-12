@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -147,7 +148,7 @@ fun WorkScreen(
     sourceFrameCount: Int,
     isImporting: Boolean,
     importProgress: Float,
-    onPickVideo: () -> Unit,
+    onPickMedia: () -> Unit,
     onTogglePlay: () -> Unit,
     onFpsChange: (Int) -> Unit,
     onIntervalChange: (Int, Int) -> Unit,
@@ -208,15 +209,13 @@ fun WorkScreen(
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            XpButton(
-                text = if (isImporting) "Importando… ${(importProgress * 100).toInt()}%" else "Importar vídeo",
-                onClick = onPickVideo,
-                isPrimaryGreen = true,
-                enabled = !isImporting,
-                modifier = Modifier.fillMaxWidth(),
-                testTag = "work_import_video"
-            )
             if (isImporting) {
+                Text(
+                    text = "Importando… ${(importProgress * 100).toInt()}%",
+                    color = workColors.text,
+                    fontFamily = PixelifyFontFamily,
+                    fontSize = 12.sp
+                )
                 XpSegmentedProgressBar(progress = importProgress, modifier = Modifier.fillMaxWidth())
             }
 
@@ -229,7 +228,8 @@ fun WorkScreen(
                     picking = false
                     onSettingsChange { it.copy(chromaKeyColor = c) }
                 },
-                onEnlarge = { enlargeOpen = true }
+                onEnlarge = { enlargeOpen = true },
+                onImportMedia = onPickMedia
             )
 
             PlaybackBar(
@@ -569,7 +569,8 @@ private fun Preview(
     isConverting: Boolean,
     picking: Boolean,
     onPickOriginal: (Color) -> Unit,
-    onEnlarge: () -> Unit
+    onEnlarge: () -> Unit,
+    onImportMedia: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -581,6 +582,7 @@ private fun Preview(
             loading = false,
             picking = picking,
             onPick = onPickOriginal,
+            onImportClick = onImportMedia,
             modifier = Modifier.weight(1f)
         )
         Column(
@@ -613,6 +615,7 @@ private fun PreviewPanel(
     loading: Boolean,
     picking: Boolean,
     onPick: ((Color) -> Unit)?,
+    onImportClick: (() -> Unit)? = null,
     modifier: Modifier
 ) {
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
@@ -634,12 +637,18 @@ private fun PreviewPanel(
         } else {
             Modifier
         }
+        val importModifier = if (!picking && onImportClick != null) {
+            Modifier.clickable(enabled = !loading) { onImportClick() }
+        } else {
+            Modifier
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp)
                 .onSizeChanged { boxSize = it }
                 .then(tapModifier)
+                .then(importModifier)
                 .clip(RoundedCornerShape(4.dp))
                 .background(Color.Black)
                 .border(
@@ -657,7 +666,13 @@ private fun PreviewPanel(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                else -> Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo", color = Color.White, fontSize = 12.sp)
+                else -> Text(
+                    fontFamily = PixelifyFontFamily,
+                    text = if (onImportClick != null) "Toque para importar\nimagem ou vídeo" else "Aguardando a original",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -752,7 +767,7 @@ private fun AnimationPanel(
 private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit) {
     if (frames.isEmpty()) {
         Text(fontFamily = PixelifyFontFamily, 
-            text = "Importe um vídeo para ver os quadros.",
+            text = "Importe uma imagem ou vídeo para ver os quadros.",
             color = workColors.muted,
             fontSize = 12.sp
         )
@@ -1090,7 +1105,7 @@ private fun ExportPanel(
                 }
             }
             if (!hasFrames) {
-                Text(fontFamily = PixelifyFontFamily, text = "Importe um vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
+                Text(fontFamily = PixelifyFontFamily, text = "Importe uma imagem ou vídeo antes de exportar.", color = HintOnLight, fontSize = 12.sp)
             }
         }
         XpCollapsibleGroupBox(title = "Automator") {

@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp
 
+import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -47,8 +48,13 @@ class MainActivity : ComponentActivity() {
             val projects by viewModel.projectsFlow.collectAsState(initial = emptyList())
             val presets by viewModel.presets.collectAsState()
 
-            val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-                if (uri != null) viewModel.importVideo(uri)
+            val pickerContext = LocalContext.current
+            val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) {
+                    // Um toque na caixa ORIGINAL aceita imagem ou vídeo: o tipo do arquivo decide o fluxo.
+                    val isVideo = pickerContext.contentResolver.getType(uri)?.startsWith("video/") == true
+                    if (isVideo) viewModel.importVideo(uri) else viewModel.importImage(uri)
+                }
             }
             val sheetPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                 if (uri != null) viewModel.importSpriteSheet(uri)
@@ -117,7 +123,7 @@ class MainActivity : ComponentActivity() {
                                         onOverwritePreset = { viewModel.overwritePreset(it) },
                                         onDeletePreset = { viewModel.deletePreset(it) },
                                         onApplyPreset = { viewModel.applyPreset(it) },
-                                        onPickVideo = { videoPicker.launch("video/*") },
+                                        onPickMedia = { if (!state.isImporting) mediaPicker.launch(arrayOf("image/*", "video/*")) },
                                         onTogglePlay = { viewModel.toggleVideoPlay() },
                                         onFpsChange = { viewModel.setVideoFps(it) },
                                         onIntervalChange = { s, e -> viewModel.setVideoInterval(s, e) },
