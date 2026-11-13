@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -310,13 +312,24 @@ fun WorkScreen(
     }
 }
 
-/** Ampliação em tela cheia: só o sprite, em fundo quadriculado para julgar a transparência. */
+private const val MIN_ZOOM = 0.5f
+private const val MAX_ZOOM = 8f
+
+private enum class EnlargeBackground { CHECKER, SOLID }
+
+/**
+ * Ampliação em tela cheia: zoom com pinça ou botões, arrastar quando ampliado,
+ * fundo xadrez ou cor sólida. A animação roda só enquanto o diálogo está aberto.
+ */
 @Composable
 private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit) {
     var index by remember { mutableStateOf(0) }
     var playing by remember { mutableStateOf(false) }
+    var zoom by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var background by remember { mutableStateOf(EnlargeBackground.CHECKER) }
+    var solidColor by remember { mutableStateOf(Color.Black) }
 
-    // A animação existe só enquanto o diálogo está aberto: ao fechar, a LaunchedEffect é cancelada.
     LaunchedEffect(playing, frames.size, fps) {
         if (playing && frames.size > 1) {
             while (true) {
@@ -326,19 +339,50 @@ private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit)
         }
     }
 
+    fun changeZoom(value: Float) {
+        zoom = value.coerceIn(MIN_ZOOM, MAX_ZOOM)
+        if (zoom <= 1f) offset = Offset.Zero // ao voltar a 100% o sprite volta ao centro
+    }
+
     val current = frames.getOrNull(index.coerceIn(0, maxOf(0, frames.size - 1)))
     val counter = if (frames.isEmpty()) "0/0" else "${index.coerceIn(0, frames.size - 1) + 1}/${frames.size}"
+    val swatches = listOf(
+        Color.Black, Color.White, Color(0xFF1A1A1E), Color(0xFF00FF00),
+        Color(0xFFFF00FF), Color(0xFF00C8FF), Color(0xFFFFE066), Color(0xFF808080)
+    )
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(modifier = Modifier.fillMaxSize().checkerboard()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (background == EnlargeBackground.CHECKER) Modifier.checkerboard()
+                    else Modifier.background(solidColor)
+                )
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, gestureZoom, _ ->
+                        changeZoom(zoom * gestureZoom)
+                        if (zoom > 1f) offset += pan
+                    }
+                }
+        ) {
             if (current != null) {
                 Image(
                     bitmap = current.asImageBitmap(),
                     contentDescription = "Sprite ampliado",
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxSize()
+                        .padding(24.dp)
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = offset.x
+                            translationY = offset.y
+                        },
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.None
                 )
@@ -357,16 +401,61 @@ private fun EnlargeDialog(frames: List<Bitmap>, fps: Int, onDismiss: () -> Unit)
                     .background(Color(0xCC000000))
                     .padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                XpButton(
-                    text = if (playing) "Pausar" else "Play",
-                    onClick = { playing = !playing },
-                    isPrimaryGreen = true,
-                    modifier = Modifier.width(140.dp),
-                    testTag = "enlarge_play"
-                )
-                Text(fontFamily = PixelifyFontFamily, text = "Quadro $counter", color = Color.White, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    XpButton(
+                        text = "-",
+                        onClick = { changeZoom(zoom / 1.25f) },
+                        modifier = Modifier.width(56.dp),
+                        testTag = "enlarge_zoom_out"
+                    )
+                    XpButton(
+                        text = "${(zoom * 100).toInt()}%",
+                        onClick = { changeZoom(1f) },
+                        modifier = Modifier.width(88.dp),
+                        testTag = "enlarge_zoom_reset"
+                    )
+                    XpButton(
+                        text = "+",
+                        onClick = { changeZoom(zoom * 1.25f) },
+                        modifier = Modifier.width(56.dp),
+                        testTag = "enlarge_zoom_in"
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    XpButton(
+                        text = "Xadrez",
+                        onClick = { background = EnlargeBackground.CHECKER },
+                        modifier = Modifier.width(88.dp),
+                        testTag = "enlarge_bg_checker"
+                    )
+                    swatches.forEach { color ->
+                        val selected = background == EnlargeBackground.SOLID && solidColor == color
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(color)
+                                .border(2.dp, if (selected) Gold else Color(0xFF808080))
+                                .clickable {
+                                    background = EnlargeBackground.SOLID
+                                    solidColor = color
+                                }
+                        )
+                    }
+                }
+                if (frames.size > 1) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        XpButton(
+                            text = if (playing) "Pausar" else "Play",
+                            onClick = { playing = !playing },
+                            isPrimaryGreen = true,
+                            modifier = Modifier.width(120.dp),
+                            testTag = "enlarge_play"
+                        )
+                        Text(text = "Quadro $counter", color = Color.White, fontFamily = PixelifyFontFamily, fontSize = 13.sp)
+                    }
+                }
             }
         }
     }
