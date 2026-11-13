@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.text.style.TextAlign
@@ -740,12 +741,12 @@ private fun PreviewPanel(
                 .onSizeChanged { boxSize = it }
                 .then(tapModifier)
                 .then(importModifier)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RectangleShape)
                 .background(Color.Black)
                 .border(
                     width = if (picking) 3.dp else 2.dp,
                     color = if (picking) Gold else Color.White,
-                    shape = RoundedCornerShape(4.dp)
+                    shape = RectangleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -869,12 +870,12 @@ private fun Timeline(frames: List<Bitmap>, current: Int, onSelect: (Int) -> Unit
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(RectangleShape)
                     .background(Color.Black)
                     .border(
                         width = if (i == current) 3.dp else 1.dp,
                         color = if (i == current) Gold else Color.Black,
-                        shape = RoundedCornerShape(3.dp)
+                        shape = RectangleShape
                     )
                     .clickable { onSelect(i) }
             ) {
@@ -904,9 +905,9 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RectangleShape)
                     .background(if (isSelected) GreenFrame else workColors.toolIdle)
-                    .border(1.dp, if (isSelected) Gold else Color.Black, RoundedCornerShape(4.dp))
+                    .border(1.dp, if (isSelected) Gold else Color.Black, RectangleShape)
                     .clickable { onSelect(tool) }
                     .padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
