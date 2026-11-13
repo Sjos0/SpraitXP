@@ -15,7 +15,6 @@ import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
 import io.github.sjos0.spritexp.domain.usecase.VideoTiming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
@@ -181,30 +180,65 @@ class MediaProcessingPipeline(private val context: Context) :
         }
 
     /**
-     * ZIP completo para usar a sprite: spritesheet.png (ARGB, com transparência),
-     * metadata.json (grade, tamanho do quadro, fps e lista de quadros) e frames/frame_XX.png.
+     * ZIP completo sem manter todos os bitmaps ampliados na RAM.
+     * Os frames são ampliados, gravados e liberados um por vez. A sheet final é
+     * opcional: acima de [MAX_SHEET_PIXELS], os frames individuais continuam
+     * obrigatoriamente disponíveis e o metadata informa que a sheet foi omitida.
      */
-    suspend fun exportSpriteBundle(frames: List<Bitmap>, columns: Int, fps: Int, baseName: String): File {
+    suspend fun exportSpriteBundleStreaming(
+        frames: List<Bitmap>,
+        columns: Int,
+        fps: Int,
+        displayScale: Int,
+        baseName: String,
+        onProgress: (Float) -> Unit = {}
+    ): File {
         require(frames.isNotEmpty()) { "Nenhum quadro para exportar" }
         val cols = maxOf(1, columns)
         val rows = (frames.size + cols - 1) / cols
-        val sheet = createMergedSpriteSheet(frames, cols)
+        val baseFrameWidth = frames[0].width
+        val baseFrameHeight = frames[0].height
+        val scale = io.github.sjos0.spritexp.domain.usecase.ExportSizing.requireSafeScale(
+            baseFrameWidth,
+            baseFrameHeight,
+            displayScale
+        )
+        val frameWidth = baseFrameWidth * scale
+        val frameHeight = baseFrameHeight * scale
+        val sheetWidth = frameWidth.toLong() * cols
+        val sheetHeight = frameHeight.toLong() * rows
+        val includeSheet = sheetWidth * sheetHeight <= MAX_SHEET_PIXELS
         val json = SpriteMetadata.toJson(
-            imageName = SpriteMetadata.SHEET_FILE_NAME,
-            frameWidth = frames[0].width,
-            frameHeight = frames[0].height,
+            imageName = if (includeSheet) SpriteMetadata.SHEET_FILE_NAME else "",
+            frameWidth = frameWidth,
+            frameHeight = frameHeight,
             columns = cols,
             rows = rows,
             frameCount = frames.size,
-            fps = fps
+            fps = fps,
+            sheetWidth = if (includeSheet) sheetWidth.toInt() else 0,
+            sheetHeight = if (includeSheet) sheetHeight.toInt() else 0,
+            sheetIncluded = includeSheet
         )
         return withContext(Dispatchers.IO) {
             val zipFile = File(context.cacheDir, "$baseName.zip")
             ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
-                zos.addEntry(SpriteMetadata.SHEET_FILE_NAME, pngBytes(sheet))
+                if (includeSheet) {
+                    val baseSheet = createMergedSpriteSheet(frames, cols)
+                    val scaledSheet = scaleNearestNeighbor(baseSheet, scale)
+                    baseSheet.recycle()
+                    zos.addBitmapEntry(SpriteMetadata.SHEET_FILE_NAME, scaledSheet)
+                    scaledSheet.recycle()
+                }
                 zos.addEntry("metadata.json", json.toByteArray(Charsets.UTF_8))
                 frames.forEachIndexed { i, frame ->
-                    zos.addEntry("frames/frame_${"%02d".format(i + 1)}.png", pngBytes(frame))
+                    val scaled = scaleNearestNeighbor(frame, scale)
+                    try {
+                        zos.addBitmapEntry("frames/frame_${"%02d".format(i + 1)}.png", scaled)
+                    } finally {
+                        scaled.recycle()
+                    }
+                    onProgress((i + 1).toFloat() / frames.size)
                 }
             }
             zipFile
@@ -217,11 +251,18 @@ class MediaProcessingPipeline(private val context: Context) :
         closeEntry()
     }
 
-    private fun pngBytes(bitmap: Bitmap): ByteArray =
-        ByteArrayOutputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            out.toByteArray()
+    private fun ZipOutputStream.addBitmapEntry(name: String, bitmap: Bitmap) {
+        putNextEntry(ZipEntry(name))
+        check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, this)) {
+            "Não foi possível comprimir $name"
         }
+        closeEntry()
+    }
+
+    private companion object {
+        /** Aproximadamente 64 MiB em pixels ARGB antes de buffers de compressão. */
+        const val MAX_SHEET_PIXELS = 16_000_000L
+    }
 
     suspend fun exportJsonMetadata(
         projectName: String,

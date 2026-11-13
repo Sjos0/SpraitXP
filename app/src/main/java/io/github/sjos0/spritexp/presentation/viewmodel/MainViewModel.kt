@@ -634,13 +634,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             _uiState.update { it.copy(isExporting = true, exportProgress = 0.1f) }
+            var failureMessage: String? = null
             val file = try {
                 writeExport(snapshot, frames)
             } catch (e: IllegalArgumentException) {
-                showAlert(e.message ?: "A escala escolhida é grande demais para exportar com segurança.")
+                failureMessage = e.message ?: "A escala escolhida é grande demais para exportar com segurança."
+                null
+            } catch (e: OutOfMemoryError) {
+                Log.e(tag, "Memória insuficiente durante a exportação", e)
+                failureMessage = "Memória insuficiente para exportar nesta escala. Reduza a escala ou a quantidade de quadros e tente novamente."
                 null
             } catch (e: Exception) {
                 Log.e(tag, "Falha na exportação", e)
+                failureMessage = "Falha ao exportar. Tente novamente."
                 null
             }
             // Copia o resultado para Download/SpriteXP: a pasta de cache pode ser apagada pelo sistema.
@@ -653,7 +659,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isExporting = false,
                     exportedFilePath = file?.absolutePath,
                     alertMessage = when {
-                        file == null -> "Falha ao exportar. Tente novamente."
+                        file == null -> failureMessage ?: "Falha ao exportar. Tente novamente."
                         savedName == null ->
                             "Exportado, mas não foi possível salvar em ${SpriteXpStorage.DISPLAY_DIR}. Verifique a permissão de armazenamento."
                         else -> "Exportação salva em ${SpriteXpStorage.DISPLAY_DIR}/$savedName"
@@ -669,27 +675,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isSheet = state.sourceKind == SourceKind.SHEET
         val columns = if (isSheet) state.analyzerColumns else ceil(sqrt(frames.size.toDouble())).toInt()
         val fps = if (isSheet) state.analyzerFps else state.videoFps
-        val scaledFrames = frames.map { frame ->
-            val scale = ExportSizing.requireSafeScale(
-                width = frame.width,
-                height = frame.height,
-                displayScale = state.pixelSettings.displayScale
-            )
-            mediaPipeline.scaleNearestNeighbor(frame, scale)
-        }
+        val scale = ExportSizing.requireSafeScale(
+            width = frames[0].width,
+            height = frames[0].height,
+            displayScale = state.pixelSettings.displayScale
+        )
 
         return when (state.exportFormat) {
             ExportFormat.SPRITE_SHEET_PNG -> {
-                val sheet = mediaPipeline.createMergedSpriteSheet(scaledFrames, columns)
+                val baseSheet = mediaPipeline.createMergedSpriteSheet(frames, columns)
+                val scaledPixels = baseSheet.width.toLong() * scale * baseSheet.height.toLong() * scale
+                if (scaledPixels > 16_000_000L) {
+                    baseSheet.recycle()
+                    throw IllegalArgumentException("A sprite sheet final ficaria grande demais para a memória. Use o ZIP completo, que grava um frame por vez.")
+                }
+                val sheet = mediaPipeline.scaleNearestNeighbor(baseSheet, scale)
+                baseSheet.recycle()
                 val file = File(getApplication<Application>().cacheDir, "$base.png")
                 file.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                sheet.recycle()
                 file
             }
-            ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundle(scaledFrames, columns, fps, base)
+            ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundleStreaming(
+                frames = frames,
+                columns = columns,
+                fps = fps,
+                displayScale = scale,
+                baseName = base
+            ) { progress ->
+                _uiState.update { it.copy(exportProgress = 0.1f + progress * 0.9f) }
+            }
             ExportFormat.JSON_METADATA -> mediaPipeline.exportJsonMetadata(
                 projectName = base,
-                frameWidth = scaledFrames[0].width,
-                frameHeight = scaledFrames[0].height,
+                frameWidth = frames[0].width * scale,
+                frameHeight = frames[0].height * scale,
                 columns = columns,
                 rows = (frames.size + columns - 1) / columns,
                 frameCount = frames.size,
