@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -151,9 +152,9 @@ fun XpWindowButton(
     Box(
         modifier = Modifier
             .size(22.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RectangleShape)
             .background(Color(0xFF3870E0))
-            .border(1.dp, Color(0xFF6B9BFF), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFF6B9BFF), RectangleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -178,9 +179,9 @@ fun XpCloseButton(
     Box(
         modifier = Modifier
             .size(22.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RectangleShape)
             .background(bgColor)
-            .border(1.dp, Color(0xFFFF9980), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFFFF9980), RectangleShape)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .testTag("window_close_button"),
         contentAlignment = Alignment.Center
@@ -229,14 +230,14 @@ fun XpButton(
 
     val finalModifier = modifier
         .heightIn(min = 44.dp)
-        .clip(RoundedCornerShape(3.dp))
+        .clip(RectangleShape)
         .background(baseBg)
-        .border(1.dp, Color(0xFF003C74), RoundedCornerShape(3.dp))
+        .border(1.dp, Color(0xFF003C74), RectangleShape)
         .padding(1.dp)
         .border(
             width = 1.dp,
             color = if (isPrimaryGreen || isDangerOrange) Color.Transparent else lightBorder,
-            shape = RoundedCornerShape(2.dp)
+            shape = RectangleShape
         )
         .clickable(
             interactionSource = interactionSource,

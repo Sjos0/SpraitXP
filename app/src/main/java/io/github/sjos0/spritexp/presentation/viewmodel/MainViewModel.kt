@@ -52,6 +52,18 @@ import kotlin.math.sqrt
 /** De onde vieram os quadros atuais. Define o que a exportação usa. */
 enum class SourceKind { DEMO, IMAGE, VIDEO, SHEET }
 
+/**
+ * Quantos quadros o export vai gerar, sem montar os bitmaps (usado na UI).
+ * Imagem convertida = 1 quadro; vídeo = quadros do intervalo; sheet = quadros selecionados.
+ */
+val MainUiState.exportFrameCount: Int
+    get() = when (sourceKind) {
+        SourceKind.VIDEO -> videoFrames.size
+        SourceKind.IMAGE, SourceKind.DEMO -> if (convertedBitmap != null) 1 else 0
+        SourceKind.SHEET -> if (analyzerSheetBitmap == null) 0
+            else (analyzerSelectedRangeEnd - analyzerSelectedRangeStart + 1).coerceIn(0, analyzerColumns * analyzerRows)
+    }
+
 data class MainUiState(
     val currentScreen: String = "splash", // splash, desktop, converter, video, analyzer, palette, export, projects, settings
     val splashProgress: Float = 0.6f,

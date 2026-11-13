@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp.presentation.components
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,9 +76,9 @@ fun XpSegmentedProgressBar(
         modifier = modifier
             .fillMaxWidth()
             .height(26.dp)
-            .clip(RoundedCornerShape(3.dp))
+            .clip(RectangleShape)
             .background(Color(0xFFE4E0D6))
-            .border(2.dp, Color(0xFF7F9DB9), RoundedCornerShape(3.dp))
+            .border(2.dp, Color(0xFF7F9DB9), RectangleShape)
             .padding(2.dp)
     ) {
         Row(
@@ -90,7 +91,7 @@ fun XpSegmentedProgressBar(
                 val boxModifier = Modifier
                     .weight(1f)
                     .height(20.dp)
-                    .clip(RoundedCornerShape(1.dp))
+                    .clip(RectangleShape)
                 val coloredModifier = if (isFilled) {
                     boxModifier.background(
                         Brush.verticalGradient(
@@ -269,9 +270,9 @@ fun XpCollapsibleGroupBox(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFD4D0C8), RoundedCornerShape(4.dp))
+            .border(1.dp, Color(0xFFD4D0C8), RectangleShape)
             .padding(1.dp)
-            .border(1.dp, Color(0xFFFFFFFF), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFFFFFFFF), RectangleShape)
             .background(XpWindowBg)
             .padding(10.dp)
     ) {
@@ -321,9 +322,9 @@ fun XpGroupBox(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFD4D0C8), RoundedCornerShape(4.dp))
+            .border(1.dp, Color(0xFFD4D0C8), RectangleShape)
             .padding(1.dp)
-            .border(1.dp, Color(0xFFFFFFFF), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFFFFFFFF), RectangleShape)
             .background(XpWindowBg)
             .padding(10.dp)
     ) {

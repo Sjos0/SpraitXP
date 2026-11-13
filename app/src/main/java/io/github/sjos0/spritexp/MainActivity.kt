@@ -1,5 +1,6 @@
 package io.github.sjos0.spritexp
 
+import io.github.sjos0.spritexp.presentation.viewmodel.exportFrameCount
 import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -118,6 +119,7 @@ class MainActivity : ComponentActivity() {
                                         isImporting = state.isImporting,
                                         importProgress = state.importProgress,
                                         isDarkTheme = state.isDarkTheme,
+                                        exportFrameCount = state.exportFrameCount,
                                         presets = presets,
                                         onSavePreset = { viewModel.savePreset(it) },
                                         onOverwritePreset = { viewModel.overwritePreset(it) },
