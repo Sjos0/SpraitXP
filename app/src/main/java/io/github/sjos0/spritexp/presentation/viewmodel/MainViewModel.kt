@@ -733,17 +733,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return when (state.exportFormat) {
             ExportFormat.SPRITE_SHEET_PNG -> {
-                val baseSheet = mediaPipeline.createMergedSpriteSheet(frames, columns)
-                val scaledPixels = baseSheet.width.toLong() * scale * baseSheet.height.toLong() * scale
-                if (scaledPixels > 16_000_000L) {
-                    baseSheet.recycle()
-                    throw IllegalArgumentException("A sprite sheet final ficaria grande demais para a memória. Use o ZIP completo, que grava um frame por vez.")
-                }
-                val sheet = mediaPipeline.scaleNearestNeighbor(baseSheet, scale)
-                baseSheet.recycle()
+                // Grava linha a linha: a sheet nunca é montada inteira na memória, então vale
+                // para um quadro ou para centenas, sem recusar por tamanho.
                 val file = File(getApplication<Application>().cacheDir, "$base.png")
-                file.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                sheet.recycle()
+                mediaPipeline.writeSheetPng(frames, columns, scale, file) { progress ->
+                    _uiState.update { it.copy(exportProgress = 0.1f + progress * 0.9f) }
+                }
                 file
             }
             ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundleStreaming(

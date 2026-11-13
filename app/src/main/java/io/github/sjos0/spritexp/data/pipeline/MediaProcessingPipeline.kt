@@ -196,6 +196,67 @@ class MediaProcessingPipeline(private val context: Context) :
         }
 
     /**
+     * Grava a sprite sheet ampliada em PNG sem montar o bitmap inteiro.
+     * Cada linha da sheet é calculada a partir dos quadros originais (vizinho mais próximo, mesma
+     * disposição de [createMergedSpriteSheet]) e comprimida na hora. Funciona para um quadro ou
+     * para centenas, com memória constante.
+     */
+    suspend fun writeSheetPng(
+        frames: List<Bitmap>,
+        columns: Int,
+        scale: Int,
+        file: File,
+        onProgress: (Float) -> Unit = {}
+    ) = withContext(Dispatchers.IO) {
+        require(frames.isNotEmpty()) { "Nenhum quadro para exportar" }
+        require(scale > 0) { "A escala precisa ser positiva" }
+        val cols = maxOf(1, columns)
+        val rows = (frames.size + cols - 1) / cols
+        val fw = frames[0].width
+        val fh = frames[0].height
+        val width = fw.toLong() * cols * scale
+        val height = fh.toLong() * rows * scale
+        require(width <= Int.MAX_VALUE && height <= Int.MAX_VALUE) { "A sprite sheet excede o tamanho máximo de PNG" }
+
+        val sourceRow = IntArray(fw)
+        StreamingPngWriter.write(
+            file = file,
+            width = width.toInt(),
+            height = height.toInt(),
+            fillRow = { y, dst ->
+                val by = y / scale
+                val frameRow = by / fh
+                val py = by % fh
+                for (col in 0 until cols) {
+                    val idx = frameRow * cols + col
+                    val cellX = col * fw * scale
+                    if (idx < frames.size) {
+                        frames[idx].getPixels(sourceRow, 0, fw, 0, py, fw, 1)
+                        for (px in 0 until fw) {
+                            val argb = sourceRow[px]
+                            val r = ((argb shr 16) and 0xFF).toByte()
+                            val g = ((argb shr 8) and 0xFF).toByte()
+                            val b = (argb and 0xFF).toByte()
+                            val a = ((argb ushr 24) and 0xFF).toByte()
+                            for (s in 0 until scale) {
+                                val o = 1 + (cellX + px * scale + s) * 4
+                                dst[o] = r
+                                dst[o + 1] = g
+                                dst[o + 2] = b
+                                dst[o + 3] = a
+                            }
+                        }
+                    } else {
+                        // Célula vazia (última linha da grade incompleta): transparente.
+                        dst.fill(0, 1 + cellX * 4, 1 + (cellX + fw * scale) * 4)
+                    }
+                }
+            },
+            onRow = { y -> onProgress((y + 1).toFloat() / height.toFloat()) }
+        )
+    }
+
+    /**
      * ZIP completo sem manter todos os bitmaps ampliados na RAM.
      * Os frames são ampliados, gravados e liberados um por vez. A sheet final é
      * opcional: acima de [MAX_SHEET_PIXELS], os frames individuais continuam
