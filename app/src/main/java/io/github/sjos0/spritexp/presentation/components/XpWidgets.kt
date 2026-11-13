@@ -2,6 +2,7 @@ package io.github.sjos0.spritexp.presentation.components
 
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -246,10 +248,18 @@ fun XpModal(
                     fontSize = 15.sp
                 )
             }
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) { content() }
+            CompositionLocalProvider(
+                LocalTextStyle provides TextStyle(
+                    fontFamily = PixelifyFontFamily,
+                    color = XpTextBlack
+                ),
+                LocalContentColor provides XpTextBlack
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) { content() }
+            }
         }
     }
 }

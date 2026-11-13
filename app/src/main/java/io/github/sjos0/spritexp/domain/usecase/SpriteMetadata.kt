@@ -14,7 +14,10 @@ object SpriteMetadata {
         columns: Int,
         rows: Int,
         frameCount: Int,
-        fps: Int
+        fps: Int,
+        sheetWidth: Int = frameWidth * columns.coerceAtLeast(1),
+        sheetHeight: Int = frameHeight * rows.coerceAtLeast(1),
+        sheetIncluded: Boolean = true
     ): String {
         val cols = columns.coerceAtLeast(1)
         val safeFps = fps.coerceAtLeast(1)
@@ -30,8 +33,9 @@ object SpriteMetadata {
     "version": "1.1",
     "image": "$imageName",
     "format": "RGBA8888",
-    "size": {"w": ${frameWidth * cols}, "h": ${frameHeight * rows}},
+    "size": {"w": $sheetWidth, "h": $sheetHeight},
     "scale": 1,
+    "sheetIncluded": $sheetIncluded,
     "frameWidth": $frameWidth,
     "frameHeight": $frameHeight,
     "columns": $cols,
