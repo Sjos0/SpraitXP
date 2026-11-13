@@ -1,5 +1,8 @@
 package io.github.sjos0.spritexp.presentation.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +26,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,6 +105,17 @@ fun SettingsScreen(
 
                 // Sons
                 XpGroupBox(title = "Sons") {
+                    // Animação leve (250 ms): knob desliza e o track troca de cor, sem teleportar.
+                    val knobOffset by animateDpAsState(
+                        targetValue = if (soundEnabled) 26.dp else 0.dp,
+                        animationSpec = tween(durationMillis = 250),
+                        label = "soundKnobOffset"
+                    )
+                    val trackColor by animateColorAsState(
+                        targetValue = if (soundEnabled) XpStartGreen else Color(0xFFACA899),
+                        animationSpec = tween(durationMillis = 250),
+                        label = "soundTrackColor"
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { onSoundChange(!soundEnabled) }
@@ -108,13 +124,14 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .size(50.dp, 26.dp)
                                 .clip(RoundedCornerShape(13.dp))
-                                .background(if (soundEnabled) XpStartGreen else Color(0xFFACA899))
+                                .background(trackColor)
                                 .border(1.dp, Color.Black, RoundedCornerShape(13.dp))
                                 .padding(2.dp),
-                            contentAlignment = if (soundEnabled) Alignment.CenterEnd else Alignment.CenterStart
+                            contentAlignment = Alignment.CenterStart
                         ) {
                             Box(
                                 modifier = Modifier
+                                    .offset(x = knobOffset)
                                     .size(20.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(Color(0xFFECE9D8))
