@@ -168,6 +168,7 @@ fun WorkScreen(
     onNavigateProjects: () -> Unit,
     onNavigateSettings: () -> Unit,
     isDarkTheme: Boolean,
+    exportFrameCount: Int,
     presets: List<SettingsPreset>,
     onSavePreset: (String) -> Unit,
     onOverwritePreset: (String) -> Unit,
@@ -279,7 +280,8 @@ fun WorkScreen(
                 )
                 WorkTab.PALETA -> PalettePanel(settings = settings, onSettingsChange = onSettingsChange)
                 WorkTab.EXPORTAR -> ExportPanel(
-                    hasFrames = frames.isNotEmpty(),
+                    hasFrames = exportFrameCount > 0,
+                    frameCount = exportFrameCount,
                     isExporting = isExporting,
                     exportProgress = exportProgress,
                     onExportSheet = onExportSheet,
@@ -1066,6 +1068,7 @@ private fun PalettePanel(settings: PixelArtSettings, onSettingsChange: ((PixelAr
 @Composable
 private fun ExportPanel(
     hasFrames: Boolean,
+    frameCount: Int,
     isExporting: Boolean,
     exportProgress: Float,
     onExportSheet: () -> Unit,
@@ -1074,7 +1077,7 @@ private fun ExportPanel(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         XpCollapsibleGroupBox(title = "Exportar quadros") {
             XpButton(
-                text = "Baixar Sprite Sheet (PNG)",
+                text = if (frameCount == 1) "Baixar PNG (1 quadro)" else "Baixar Sprite Sheet (PNG)",
                 onClick = onExportSheet,
                 isPrimaryGreen = true,
                 enabled = hasFrames && !isExporting,
