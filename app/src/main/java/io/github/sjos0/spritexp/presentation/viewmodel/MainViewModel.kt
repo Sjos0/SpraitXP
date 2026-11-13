@@ -160,6 +160,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var extractInFlight: Boolean = false
     private var videoUri: String? = null
 
+    /**
+     * Cada origem nova (imagem, vídeo ou sprite sheet) incrementa este número.
+     * Uma extração que termina depois da troca de origem vê a época mudada e não toca a sessão nova.
+     */
+    private var sourceEpoch: Long = 0L
+
     init {
         observeInstallEvents()
         startSplashLoading()
@@ -382,37 +388,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------- Importação ----------
 
-    /** Recebe a imagem decodificada pela tela do conversor. Só aceita 1:1. */
+    /**
+     * Aplica uma imagem como nova origem. Qualquer proporção é aceita: se não for 1:1,
+     * recorta o centro. Substitui por completo a sessão anterior (vídeo, sheet ou imagem).
+     */
     fun setOriginalImage(bitmap: Bitmap) {
-        if (!ImageRules.isSquare(bitmap.width, bitmap.height)) {
-            showAlert(ImageRules.SQUARE_ONLY_MESSAGE)
-            return
+        val square = mediaPipeline.centerCropSquare(bitmap)
+        clearSourceSession()
+        _uiState.update {
+            it.copy(
+                originalBitmap = square,
+                sourceKind = SourceKind.IMAGE,
+                sourceName = "Imagem"
+            )
         }
-        _uiState.value = _uiState.value.copy(
-            originalBitmap = bitmap,
-            sourceKind = SourceKind.IMAGE,
-            sourceName = "Imagem"
-        )
         requestPixelConversion()
     }
 
-    /** Importa uma imagem pelo URI. Valida 1:1 antes de decodificar. */
+    /**
+     * Importa uma imagem pelo URI, em qualquer proporção. O recorte é sempre 1:1 pelo centro.
+     * A sessão anterior só é descartada depois que a nova imagem foi lida com sucesso.
+     */
     fun importImage(uri: Uri) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isImporting = true)
-            val size = withContext(Dispatchers.IO) { mediaPipeline.probeImageSize(uri.toString()) }
-            if (size == null || !ImageRules.isSquare(size.first, size.second)) {
-                _uiState.value = _uiState.value.copy(isImporting = false)
-                showAlert(ImageRules.SQUARE_ONLY_MESSAGE)
-                return@launch
+            _uiState.update { it.copy(isImporting = true) }
+            val bmp = withContext(Dispatchers.IO) {
+                mediaPipeline.decodeImageCenterSquare(uri.toString(), maxSide = 512)
             }
-            val bmp = withContext(Dispatchers.IO) { mediaPipeline.decodeImage(uri.toString(), maxSide = 512) }
-            _uiState.value = _uiState.value.copy(isImporting = false)
+            _uiState.update { it.copy(isImporting = false) }
             if (bmp == null) {
                 showAlert("Não foi possível abrir esta imagem.")
                 return@launch
             }
             setOriginalImage(bmp)
+        }
+    }
+
+    /**
+     * Esvazia a origem anterior: quadros de vídeo, intervalo, sheet do analisador, imagens e prévia.
+     * Só é chamada quando a nova mídia já foi lida, para que uma falha no import não apague o trabalho.
+     * Os bitmaps antigos não são reciclados, porque a UI pode ainda estar desenhando algum deles.
+     */
+    private fun clearSourceSession() {
+        sourceEpoch++
+        debounceConversionJob?.cancel()
+        videoJob?.cancel()
+        animationJob?.cancel()
+        conversionJob?.cancel()
+        conversionVersion++
+        rawVideoFrames = emptyList()
+        rawRangeStart = 1
+        rawRangeEnd = 0
+        videoUri = null
+        _uiState.update { s ->
+            s.copy(
+                originalBitmap = null,
+                convertedBitmap = null,
+                isConverting = false,
+                videoFrames = emptyList(),
+                videoStartFrame = 1,
+                videoEndFrame = 1,
+                videoTotalFrames = 0,
+                currentFrameIndex = 0,
+                isPlayingPreview = false,
+                analyzerSheetBitmap = null,
+                analyzerSelectedRangeStart = 1,
+                analyzerSelectedRangeEnd = s.analyzerColumns * s.analyzerRows
+            )
         }
     }
 
@@ -427,6 +469,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 showAlert("Não foi possível ler este vídeo.")
                 return@launch
             }
+            clearSourceSession()
             videoUri = uri.toString()
             _uiState.value = _uiState.value.copy(
                 sourceKind = SourceKind.VIDEO,
@@ -469,6 +512,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 showAlert("Não foi possível abrir esta sprite sheet.")
                 return@launch
             }
+            clearSourceSession()
             _uiState.value = _uiState.value.copy(
                 analyzerSheetBitmap = sheet,
                 sourceKind = SourceKind.SHEET,
@@ -525,6 +569,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun extractVideoFrames() {
         val uri = videoUri ?: return
         val s = _uiState.value
+        val epoch = sourceEpoch
         extractInFlight = true
         _uiState.update { it.copy(isImporting = true, importProgress = 0f) }
         var extracted = false
@@ -540,6 +585,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     onProgress = { p -> _uiState.update { it.copy(importProgress = p) } }
                 )
             }
+            // Origem trocada durante a extração: descarta estes quadros, eles não pertencem mais à tela.
+            if (epoch != sourceEpoch) return
             rawVideoFrames = frames
             rawRangeStart = s.videoStartFrame
             rawRangeEnd = s.videoStartFrame + frames.size - 1
@@ -552,8 +599,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showAlert("Não foi possível extrair os quadros deste vídeo. Tente um intervalo menor.")
         } finally {
             // Sempre limpa o progresso, mesmo com erro ou cancelamento: o botão nunca fica preso.
-            extractInFlight = false
-            _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
+            // Só mexe nas flags se ainda for a mesma origem; a nova pode estar extraindo agora.
+            if (epoch == sourceEpoch) {
+                extractInFlight = false
+                _uiState.update { it.copy(isImporting = false, importProgress = 0f) }
+            }
         }
         if (extracted) requestPixelConversion()
     }

@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
+import io.github.sjos0.spritexp.domain.usecase.ImageRules
 import io.github.sjos0.spritexp.domain.usecase.SpriteMetadata
 import io.github.sjos0.spritexp.domain.usecase.SpriteSheetAnalyzerUseCase
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameExtractorUseCase
@@ -90,14 +91,7 @@ class MediaProcessingPipeline(private val context: Context) :
      * para preservar os pixels de pixel art e economizar memória.
      */
     fun decodeImage(imageUriString: String, maxSide: Int): Bitmap? {
-        val source = try {
-            context.contentResolver.openInputStream(Uri.parse(imageUriString))?.use {
-                BitmapFactory.decodeStream(it)
-            }
-        } catch (e: Exception) {
-            Log.e(tag, "Falha ao decodificar imagem", e)
-            null
-        } ?: return null
+        val source = decodeSource(imageUriString) ?: return null
 
         val side = maxOf(source.width, source.height)
         if (side <= maxSide) return source
@@ -109,6 +103,28 @@ class MediaProcessingPipeline(private val context: Context) :
             false
         )
     }
+
+    /**
+     * Decodifica uma imagem em qualquer proporção e já a entrega em 1:1: recorta o maior quadrado
+     * centralizado a partir da resolução original e só então reduz, se passar de [maxSide].
+     * Assim a imagem 16:9 ou 9:16 perde as bordas laterais, e não a resolução do quadrado.
+     */
+    fun decodeImageCenterSquare(imageUriString: String, maxSide: Int): Bitmap? {
+        val source = decodeSource(imageUriString) ?: return null
+        val square = centerCropSquare(source)
+        if (square.width <= maxSide) return square
+        return Bitmap.createScaledBitmap(square, maxSide, maxSide, false)
+    }
+
+    private fun decodeSource(imageUriString: String): Bitmap? =
+        try {
+            context.contentResolver.openInputStream(Uri.parse(imageUriString))?.use {
+                BitmapFactory.decodeStream(it)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Falha ao decodificar imagem", e)
+            null
+        }
 
     override suspend fun extractFrames(
         videoUriString: String,
@@ -293,6 +309,16 @@ class MediaProcessingPipeline(private val context: Context) :
         } else {
             retriever.setDataSource(source)
         }
+    }
+
+    /**
+     * Recorta a imagem no centro para 1:1 (o maior quadrado possível), sem escalar.
+     * Imagens já quadradas voltam como estão. Usado pelo import de imagem, que aceita qualquer proporção.
+     */
+    fun centerCropSquare(src: Bitmap): Bitmap {
+        val crop = ImageRules.centerSquareCrop(src.width, src.height) ?: return src
+        if (crop.x == 0 && crop.y == 0 && crop.side == src.width && crop.side == src.height) return src
+        return Bitmap.createBitmap(src, crop.x, crop.y, crop.side, crop.side)
     }
 
     /**
