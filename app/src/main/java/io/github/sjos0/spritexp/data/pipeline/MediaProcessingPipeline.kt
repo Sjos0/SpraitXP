@@ -26,6 +26,13 @@ class MediaProcessingPipeline(private val context: Context) :
 
     private val tag = "SpriteXP"
 
+    /** Amplia sem interpolação: cada pixel convertido vira um bloco uniforme. */
+    fun scaleNearestNeighbor(bitmap: Bitmap, factor: Int): Bitmap {
+        require(factor > 0) { "A escala precisa ser positiva" }
+        if (factor == 1) return bitmap
+        return Bitmap.createScaledBitmap(bitmap, bitmap.width * factor, bitmap.height * factor, false)
+    }
+
     /** Confere a largura e a altura de um vídeo, considerando a rotação gravada no arquivo. */
     fun probeVideoSize(videoUriString: String): Pair<Int, Int>? {
         val retriever = MediaMetadataRetriever()

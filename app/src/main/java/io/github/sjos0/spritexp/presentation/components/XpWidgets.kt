@@ -5,9 +5,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +48,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import io.github.sjos0.spritexp.ui.theme.LunaTitleMid
 import io.github.sjos0.spritexp.ui.theme.LunaTitleStart
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
@@ -180,13 +180,8 @@ private fun NumericEditDialog(
     var text by remember { mutableStateOf(fmt(current)) }
     val parsed = text.replace(',', '.').toFloatOrNull()
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = XpWindowBg,
-        titleContentColor = Color.Black,
-        textContentColor = Color.Black,
-        title = { Text(text = "Editar $label", fontFamily = PixelifyFontFamily, color = LunaTitleStart) },
-        text = {
+    XpModal(title = "Editar $label", onDismissRequest = onDismiss) {
+        Column {
             OutlinedTextField(
                 value = text,
                 onValueChange = { raw -> text = raw.filter { it.isDigit() || it == '.' || it == ',' || it == '-' }.take(8) },
@@ -202,15 +197,61 @@ private fun NumericEditDialog(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-        },
-        confirmButton = {
-            TextButton(
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            XpButton(text = "Cancelar", onClick = onDismiss)
+            Spacer(modifier = Modifier.width(8.dp))
+            XpButton(
+                text = "OK",
                 enabled = parsed != null,
-                onClick = { parsed?.let { onConfirm(it.coerceIn(valueRange)) } }
-            ) { Text("OK") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-    )
+                onClick = { parsed?.let { onConfirm(it.coerceIn(valueRange)) } },
+                isPrimaryGreen = true
+            )
+        }
+    }
+}
+
+/** Modal interno do app com aparência quadrada e barra de título estilo Windows XP. */
+@Composable
+fun XpModal(
+    title: String,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth(0.92f)
+                .border(2.dp, Color(0xFF003C74), RectangleShape)
+                .background(XpWindowBg)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.horizontalGradient(listOf(LunaTitleStart, LunaTitleMid)))
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontFamily = PixelifyFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            }
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) { content() }
+        }
+    }
 }
 
 /**

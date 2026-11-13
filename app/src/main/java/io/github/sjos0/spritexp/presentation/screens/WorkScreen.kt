@@ -12,9 +12,7 @@ import java.util.Locale
 import java.util.Date
 import java.text.SimpleDateFormat
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.AlertDialog
 import io.github.sjos0.spritexp.domain.model.SettingsPreset
 import io.github.sjos0.spritexp.presentation.components.XpCollapsibleGroupBox
 import android.graphics.Bitmap
@@ -85,6 +83,7 @@ import io.github.sjos0.spritexp.presentation.components.XpButton
 import io.github.sjos0.spritexp.presentation.components.XpRadioButton
 import io.github.sjos0.spritexp.presentation.components.XpSlider
 import io.github.sjos0.spritexp.presentation.components.XpSegmentedProgressBar
+import io.github.sjos0.spritexp.presentation.components.XpModal
 
 private val GreenFrame = Color(0xFF388E3C)
 private val Gold = Color(0xFFFFE066)
@@ -521,13 +520,7 @@ private fun PresetsDialog(
     var pending by remember { mutableStateOf<Pair<PresetAction, SettingsPreset>?>(null) }
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
 
-    AlertDialog(
-        onDismissRequest = onClose,
-        containerColor = Color(0xFFECE9D8),
-        titleContentColor = Color.Black,
-        textContentColor = Color.Black,
-        title = { Text(text = "Presets", fontFamily = PixelifyFontFamily, color = Color(0xFF0A246A)) },
-        text = {
+    XpModal(title = "Presets", onDismissRequest = onClose) {
             Column(
                 modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -600,32 +593,29 @@ private fun PresetsDialog(
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Fechar") } }
-    )
+            XpButton("Fechar", onClose, modifier = Modifier.fillMaxWidth())
+    }
 
     pending?.let { (action, preset) ->
         val isDelete = action == PresetAction.DELETE
-        AlertDialog(
-            onDismissRequest = { pending = null },
-            containerColor = Color(0xFFECE9D8),
-            titleContentColor = Color.Black,
-            textContentColor = Color.Black,
-            title = { Text("Tem certeza?") },
-            text = {
+        XpModal(title = "Tem certeza?", onDismissRequest = { pending = null }) {
                 Text(
                     if (isDelete) "O preset \"${preset.name}\" será excluído."
-                    else "O preset \"${preset.name}\" será substituído pelos ajustes atuais."
+                    else "O preset \"${preset.name}\" será substituído pelos ajustes atuais.",
+                    color = Color.Black
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+                XpButton(
+                    text = if (isDelete) "Excluir" else "Sobrescrever",
+                    onClick = {
                     if (isDelete) onDelete(preset.id) else onOverwrite(preset.id)
                     pending = null
-                }) { Text(if (isDelete) "Excluir" else "Sobrescrever") }
-            },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Cancelar") } }
-        )
+                    },
+                    isDangerOrange = isDelete,
+                    isPrimaryGreen = !isDelete,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                XpButton("Cancelar", { pending = null }, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
