@@ -14,4 +14,3 @@ object ExportSizing {
         return result.toInt()
     }
 }
-***
