@@ -31,6 +31,7 @@ import io.github.sjos0.spritexp.domain.model.PixelArtSettings
 import io.github.sjos0.spritexp.domain.model.SpriteProject
 import io.github.sjos0.spritexp.domain.usecase.ImageRules
 import io.github.sjos0.spritexp.domain.usecase.VideoFrameMath
+import io.github.sjos0.spritexp.domain.usecase.ExportSizing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -171,9 +172,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(splashProgress = p / 100f)
             }
             delay(150)
+            val prefs = getApplication<Application>().getSharedPreferences("spritexp_app", Context.MODE_PRIVATE)
+            val firstRun = !prefs.getBoolean("welcome_shown", false)
+            if (firstRun) prefs.edit().putBoolean("welcome_shown", true).apply()
             _uiState.value = _uiState.value.copy(
                 currentScreen = "work",
-                alertMessage = "Bem-vindo ao SpriteXP!"
+                alertMessage = if (firstRun) "Bem-vindo ao SpriteXP!" else null
             )
             requestPixelConversion()
             announceIfJustUpdated()
@@ -632,6 +636,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isExporting = true, exportProgress = 0.1f) }
             val file = try {
                 writeExport(snapshot, frames)
+            } catch (e: IllegalArgumentException) {
+                showAlert(e.message ?: "A escala escolhida é grande demais para exportar com segurança.")
+                null
             } catch (e: Exception) {
                 Log.e(tag, "Falha na exportação", e)
                 null
@@ -662,19 +669,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isSheet = state.sourceKind == SourceKind.SHEET
         val columns = if (isSheet) state.analyzerColumns else ceil(sqrt(frames.size.toDouble())).toInt()
         val fps = if (isSheet) state.analyzerFps else state.videoFps
+        val scaledFrames = frames.map { frame ->
+            ExportSizing.finalSide(frame.width, state.pixelSettings.displayScale)
+            mediaPipeline.scaleNearestNeighbor(frame, state.pixelSettings.displayScale)
+        }
 
         return when (state.exportFormat) {
             ExportFormat.SPRITE_SHEET_PNG -> {
-                val sheet = mediaPipeline.createMergedSpriteSheet(frames, columns)
+                val sheet = mediaPipeline.createMergedSpriteSheet(scaledFrames, columns)
                 val file = File(getApplication<Application>().cacheDir, "$base.png")
                 file.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 file
             }
-            ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundle(frames, columns, fps, base)
+            ExportFormat.ZIP_PNGS -> mediaPipeline.exportSpriteBundle(scaledFrames, columns, fps, base)
             ExportFormat.JSON_METADATA -> mediaPipeline.exportJsonMetadata(
                 projectName = base,
-                frameWidth = frames[0].width,
-                frameHeight = frames[0].height,
+                frameWidth = scaledFrames[0].width,
+                frameHeight = scaledFrames[0].height,
                 columns = columns,
                 rows = (frames.size + columns - 1) / columns,
                 frameCount = frames.size,
@@ -714,7 +725,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             InstallEvents.events.receiveAsFlow().collect { event ->
                 when (event) {
-                    InstallEvent.Installed -> setUpdate { it.copy(stage = UpdateStage.IDLE) }
+                    InstallEvent.Installed -> {
+                        setUpdate { it.copy(stage = UpdateStage.IDLE, message = null) }
+                        showAlert("Atualização instalada. Se o SpriteXP fechar, abra-o novamente.")
+                    }
                     is InstallEvent.Failed -> setUpdate {
                         it.copy(stage = UpdateStage.ERROR, message = "Não foi possível instalar: ${event.reason}")
                     }
