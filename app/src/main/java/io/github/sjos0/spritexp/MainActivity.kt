@@ -1,5 +1,7 @@
 package io.github.sjos0.spritexp
 
+import io.github.sjos0.spritexp.BuildConfig
+
 import io.github.sjos0.spritexp.presentation.viewmodel.exportFrameCount
 import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
@@ -153,7 +155,10 @@ class MainActivity : ComponentActivity() {
                                         
                                         onShowAbout = {
                                             viewModel.showAlert(
-                                                "SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa\nAndroid 8.0+"
+                                                "SpriteXP ${BuildConfig.VERSION_NAME}\n" +
+                                                    "Oficina de Pixel Art Retrô\n" +
+                                                    "Arquitetura Limpa\n" +
+                                                    "Android 8.0+"
                                             )
                                         }
                                     )
@@ -174,7 +179,10 @@ class MainActivity : ComponentActivity() {
                                     onLanguageChange = { viewModel.setLanguage(it) },
                                     onShowAbout = {
                                         viewModel.showAlert(
-                                            "SpriteXP v1.0\nOficina de Pixel Art Retrô\nArquitetura Limpa\nAndroid 8.0+"
+                                            "SpriteXP ${BuildConfig.VERSION_NAME}\n" +
+                                                "Oficina de Pixel Art Retrô\n" +
+                                                "Arquitetura Limpa\n" +
+                                                "Android 8.0+"
                                         )
                                     },
                                     onCheckUpdates = { viewModel.checkForUpdates(manual = true) },

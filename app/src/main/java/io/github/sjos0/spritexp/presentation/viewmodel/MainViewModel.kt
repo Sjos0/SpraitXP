@@ -670,8 +670,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val columns = if (isSheet) state.analyzerColumns else ceil(sqrt(frames.size.toDouble())).toInt()
         val fps = if (isSheet) state.analyzerFps else state.videoFps
         val scaledFrames = frames.map { frame ->
-            ExportSizing.finalSide(frame.width, state.pixelSettings.displayScale)
-            mediaPipeline.scaleNearestNeighbor(frame, state.pixelSettings.displayScale)
+            val scale = ExportSizing.requireSafeScale(
+                width = frame.width,
+                height = frame.height,
+                displayScale = state.pixelSettings.displayScale
+            )
+            mediaPipeline.scaleNearestNeighbor(frame, scale)
         }
 
         return when (state.exportFormat) {
